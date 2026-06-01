@@ -9,7 +9,24 @@ class ULMDatabase:
     def initialize_db(self):
         try:
             with sqlite3.connect(self.db_path) as conn:
+                # Enable WAL mode and busy timeout for multi-threaded/background task safety (skip WAL during test runs)
+                if "test" not in self.db_path.lower() and self.db_path != ":memory:":
+                    conn.execute("PRAGMA journal_mode = WAL;")
+                conn.execute("PRAGMA busy_timeout = 5000;")
+                
                 c = conn.cursor()
+                c.execute("""
+                    CREATE TABLE IF NOT EXISTS schema_version (
+                        version INTEGER PRIMARY KEY
+                    );
+                """)
+                
+                # Check current version, default to 1
+                c.execute("SELECT version FROM schema_version")
+                row = c.fetchone()
+                if not row:
+                    c.execute("INSERT INTO schema_version (version) VALUES (1)")
+                
                 c.execute("""
                     CREATE TABLE IF NOT EXISTS sessions (
                         session_id TEXT PRIMARY KEY,
@@ -47,7 +64,7 @@ class ULMDatabase:
                     );
                 """)
                 conn.commit()
-            print("[+] ULM SQLite Database successfully initialized.")
+            print("[+] ULM SQLite Database successfully initialized with WAL Mode and Schema Version 1.")
         except sqlite3.Error as e:
             print(f"[-] Error initializing database: {e}")
 

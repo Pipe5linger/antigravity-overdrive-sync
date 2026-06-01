@@ -9,7 +9,13 @@ class ULMEngine:
     def __init__(self, target_yaml=None):
         if not target_yaml:
             USER_HOME = os.path.expanduser("~")
-            output_dir = os.path.join(USER_HOME, "Desktop", "Antigravity outputs")
+            # Cross-platform fallback: Check if Desktop exists, otherwise use a clean ~/.ulm_sync directory
+            desktop_dir = os.path.join(USER_HOME, "Desktop")
+            if os.path.exists(desktop_dir):
+                output_dir = os.path.join(desktop_dir, "Antigravity outputs")
+            else:
+                output_dir = os.path.join(USER_HOME, ".ulm_sync")
+                
             if not os.path.exists(output_dir):
                 os.makedirs(output_dir)
             target_yaml = os.path.join(output_dir, "sync_state.yaml")
