@@ -84,7 +84,14 @@ class GeminiMdInjector(BaseInjector):
         chats = sync_data.get("chats", {})
         self.state_mutated = False
         
-        for c_id, chat_info in chats.items():
+        # Sort chats chronologically: newest first
+        sorted_chats = sorted(
+            chats.items(),
+            key=lambda x: x[1].get("last_mutated", ""),
+            reverse=True
+        )
+        
+        for c_id, chat_info in sorted_chats:
             logs = chat_info.get("log", [])
             last_mutated = chat_info.get("last_mutated", "Unknown")
             
