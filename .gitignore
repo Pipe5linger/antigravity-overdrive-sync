@@ -1,0 +1,14 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# OS Metadata
+.DS_Store
+Thumbs.db
+
+# User Outputs & Sensitive Session Data (Guarantees no local logs are leaked upstream)
+sync_state.yaml
+*.yaml.tmp
+*.tmp
+Antigravity outputs/
