@@ -25,6 +25,10 @@ def generate_mock_brain():
     if os.path.exists(MOCK_BRAIN):
         shutil.rmtree(MOCK_BRAIN)
     os.makedirs(MOCK_BRAIN)
+    
+    if os.path.exists(MOCK_OUTPUT_DIR):
+        shutil.rmtree(MOCK_OUTPUT_DIR)
+    os.makedirs(MOCK_OUTPUT_DIR)
 
     # 1. Generate 99 standard-sized chat sessions (each with ~50 messages)
     for i in range(99):

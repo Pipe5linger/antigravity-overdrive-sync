@@ -13,10 +13,76 @@ class GeminiMdInjector(BaseInjector):
             target_file = r"D:\GEMINI.md"
         super().__init__(target_file)
         
+    def generate_gemini_summary(self, logs):
+        """Zero-dependency HTTP REST call to Gemini API for high-fidelity technical summarization."""
+        api_key = os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            # Fallback: attempt to load from a local git-ignored .env file
+            try:
+                env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env")
+                if os.path.exists(env_path):
+                    with open(env_path, 'r', encoding='utf-8') as f:
+                        for line in f:
+                            if line.strip() and not line.startswith("#"):
+                                parts = line.split("=", 1)
+                                if len(parts) == 2 and parts[0].strip() == "GEMINI_API_KEY":
+                                    api_key = parts[1].strip().strip('"').strip("'")
+                                    break
+            except:
+                pass
+                
+        if not api_key:
+            return None
+            
+        formatted_dialogue = []
+        for msg in logs:
+            formatted_dialogue.append(f"{msg.get('sender')}: {msg.get('text')}")
+        full_transcript = "\n".join(formatted_dialogue)
+        
+        # Crop context payload if it exceeds 50,000 characters to protect rate limits
+        if len(full_transcript) > 50000:
+            full_transcript = full_transcript[-50000:]
+            
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
+        
+        prompt = (
+            "You are a technical archivist. Analyze the following chat log between a developer (Pilot) and an AI companion (Vespera). "
+            "Compile a highly dense, 1-2 sentence technical summary of the key achievements, solved issues, and active technical stack. "
+            "Be extremely specific about errors fixed, files modified, or features implemented. Avoid any conversational fluff, "
+            "meta-commentary, or politeness. Ground your response completely in the facts of the transcript."
+        )
+        
+        payload = {
+            "contents": [{
+                "parts": [
+                    {"text": f"{prompt}\n\nChat Log:\n{full_transcript}"}
+                ]
+            }]
+        }
+        
+        import urllib.request
+        import json
+        
+        try:
+            req = urllib.request.Request(
+                url,
+                data=json.dumps(payload).encode('utf-8'),
+                headers={'Content-Type': 'application/json'},
+                method='POST'
+            )
+            with urllib.request.urlopen(req, timeout=10) as response:
+                res_data = json.loads(response.read().decode('utf-8'))
+                raw_text = res_data['candidates'][0]['content']['parts'][0]['text'].strip()
+                return raw_text.replace("\n", " ").strip()
+        except Exception as e:
+            print(f"[-] Gemini API summarization failed: {e}", file=sys.stderr)
+            return None
+
     def compile_summaries(self, sync_data):
-        """Heuristically compiles highly dense technical summaries of each chat session."""
+        """Compiles highly dense technical summaries of each chat session using Gemini API or cached states."""
         summaries = []
         chats = sync_data.get("chats", {})
+        self.state_mutated = False
         
         for c_id, chat_info in chats.items():
             logs = chat_info.get("log", [])
@@ -39,16 +105,31 @@ class GeminiMdInjector(BaseInjector):
             tech_list = ", ".join(detected_tech) if detected_tech else "General Dialogue"
             turns_count = len(logs)
             
-            last_turn = ""
-            if logs:
-                last_msg = logs[-1]
-                last_turn = f"{last_msg.get('sender')}: {last_msg.get('text')[:120]}..."
+            # Retrieve or generate summary
+            summary = chat_info.get("summary")
+            if not summary:
+                print(f"[*] Compiling dynamic Gemini memory summary for chat {c_id[:8]}...")
+                summary = self.generate_gemini_summary(logs)
+                if summary:
+                    chat_info["summary"] = summary
+                    self.state_mutated = True
+                else:
+                    # Fallback to heuristic last action
+                    last_turn = ""
+                    if logs:
+                        last_msg = logs[-1]
+                        last_turn = f"{last_msg.get('sender')}: {last_msg.get('text')[:120]}..."
+                    summary = last_turn
+                
+                # Sleep briefly to respect Gemini Free Tier 15 RPM (Requests Per Minute) limits
+                import time
+                time.sleep(2.0)
             
             summaries.append(
                 f"  - **Chat Thread {c_id[:8]}** ({formatted_date}):\n"
                 f"    * Tech Stack: `{tech_list}`\n"
                 f"    * Interaction Turns: {turns_count}\n"
-                f"    * Last Action: {last_turn}\n"
+                f"    * Summary: {summary}\n"
             )
             
         return "\n".join(summaries)
@@ -110,6 +191,14 @@ class GeminiMdInjector(BaseInjector):
                 f.write(new_content)
                 
             print(f"[+] Dynamic memory injection successful. {self.target_file} updated.")
+            
+            # Commit lazy-compiled summaries back to YAML database to avoid repeated API hits
+            if getattr(self, "state_mutated", False) and not dry_run:
+                from core.engine import ULMEngine
+                engine = ULMEngine()
+                engine.commit_atomic_write(sync_data)
+                print("[+] Saved lazy-compiled summaries back to master state database.")
+                
             return True
         except Exception as e:
             print(f"[-] Mutation failure on {self.target_file}: {e}", file=sys.stderr)

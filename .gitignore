@@ -12,3 +12,6 @@ sync_state.yaml
 *.yaml.tmp
 *.tmp
 Antigravity outputs/
+.env
+.env.local
+.env.*

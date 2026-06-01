@@ -48,6 +48,9 @@ class ULMEngine:
                 if len(incoming_logs) > len(existing_logs):
                     updated_chats[c_id]["log"] = incoming_logs
                     updated_chats[c_id]["last_mutated"] = last_mutated
+                    # Clear out outdated cached summary to force dynamic regeneration
+                    if "summary" in updated_chats[c_id]:
+                        del updated_chats[c_id]["summary"]
                     mutations += 1
 
         # Recalculate metadata
