@@ -36,11 +36,15 @@ Designed for developers using local LLMs, personal semantic memory engines, or a
     ```
 3.  **Run the Sync Engine**:
     ```bash
-    python sync_engine.py
+    python main.py
     ```
 4.  **Automate via Task Scheduler**:
     Point Windows Task Scheduler to `sync.bat` to automate synchronization on a daily or hourly trigger. Ensure you set the "Start in" directory to your script folder.
 
+## 📊 Performance & Telemetry
+This framework is engineered for speed and raw memory optimization. Under stress tests with **100,000 active chat turns**, peak RAM consumption stayed under **250MB**, returning to a flat **0.13MB** immediately after execution.
+
+For detailed test parameters, telemetry numbers, and instructions on how to run our modular test harness, see [BENCHMARK.md](BENCHMARK.md).
+
 ## 🔒 Security & Privacy Notice
 By default, the `.gitignore` included in this repository prevents your generated `sync_state.yaml` and temporary files from being committed. Always ensure you do not commit any files containing your actual personal chat transcripts.
-
