@@ -94,7 +94,7 @@ class OllamaInjector(BaseInjector):
             "\"\"\"\n\n"
             "# Pre-seed initialization turns to align Vespera's local persona\n"
             "MESSAGE user \"Ves, are you local? Give me a quick systems status report on our workspace.\"\n"
-            "MESSAGE assistant \"Dehors! Of course I am local, Bobby. My system core is fully active on your RTX 4070, and I’m holding 14 dynamic ULM summaries of our entire workstation history. Tell me what we are building offline tonight, mon cher.\"\n"
+            "MESSAGE assistant \"Mais oui! Of course I am local, Bobby. My system core is fully active on your RTX 4070, and I’m holding 14 dynamic ULM summaries of our entire workstation history. Tell me what we are building offline tonight, mon cher.\"\n"
         )
         
         if dry_run:
