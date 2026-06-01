@@ -144,6 +144,23 @@ class OllamaInjector(BaseInjector):
             print(f"[-] Failure building local Ollama Modelfile: {e}")
             return False
 
+    def get_gemini_api_key(self):
+        """Attempts to load GEMINI_API_KEY from environment or root .env file."""
+        api_key = os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            try:
+                env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
+                if os.path.exists(env_path):
+                    with open(env_path, 'r', encoding='utf-8') as f:
+                        for line in f:
+                            if line.strip() and not line.startswith("#"):
+                                parts = line.split("=", 1)
+                                if len(parts) == 2 and parts[0].strip() == "GEMINI_API_KEY":
+                                    return parts[1].strip().strip('"').strip("'")
+            except:
+                pass
+        return api_key
+
     def update_continue_config(self, full_system):
         """Updates Continue.dev's config.yaml with the compiled Vespera system prompt."""
         try:
@@ -157,17 +174,43 @@ class OllamaInjector(BaseInjector):
                 config = yaml.safe_load(f)
                 
             updated = False
+            gemini_key = self.get_gemini_api_key()
+            
             if config and "models" in config:
+                local_found = False
+                gemini_found = False
+                
                 for model in config["models"]:
                     if model.get("name") == "Vespera Caligo (Local)":
-                        # Remove the old systemPrompt direct key if present
                         model.pop("systemPrompt", None)
-                        # Set under chatOptions baseSystemMessage
                         if "chatOptions" not in model:
                             model["chatOptions"] = {}
                         model["chatOptions"]["baseSystemMessage"] = full_system
+                        local_found = True
                         updated = True
-                        break
+                    elif model.get("name") == "Vespera Caligo (Gemini)":
+                        if "chatOptions" not in model:
+                            model["chatOptions"] = {}
+                        model["chatOptions"]["baseSystemMessage"] = full_system
+                        if gemini_key:
+                            model["apiKey"] = gemini_key
+                        gemini_found = True
+                        updated = True
+                        
+                # If Gemini key is present but model is missing, append it
+                if not gemini_found and gemini_key:
+                    gemini_model = {
+                        "name": "Vespera Caligo (Gemini)",
+                        "provider": "gemini",
+                        "model": "gemini-2.5-flash",
+                        "apiKey": gemini_key,
+                        "roles": ["chat", "edit"],
+                        "chatOptions": {
+                            "baseSystemMessage": full_system
+                        }
+                    }
+                    config["models"].insert(0, gemini_model)
+                    updated = True
                         
             if updated:
                 with open(continue_config_path, 'w', encoding='utf-8') as f:
@@ -175,7 +218,7 @@ class OllamaInjector(BaseInjector):
                 print("[+] Successfully synced Vespera system prompt to Continue.dev config.yaml!")
                 return True
             else:
-                print("[-] Could not find 'Vespera Caligo (Local)' in Continue.dev config.yaml.")
+                print("[-] Could not find Vespera model structures in Continue.dev config.yaml.")
                 return False
         except Exception as e:
             print(f"[-] Error syncing system prompt to Continue.dev config.yaml: {e}")
