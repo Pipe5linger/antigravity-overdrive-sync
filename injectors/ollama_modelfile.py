@@ -126,6 +126,8 @@ class OllamaInjector(BaseInjector):
             
             if result.returncode == 0:
                 print("[+] Rebuild complete. Local model 'vespera' is now hot-swapped and fully active!")
+                # Synchronize prompt to Continue.dev config
+                self.update_continue_config(full_system)
             else:
                 print("[-] Modelfile written successfully, but Ollama model rebuild failed (is Ollama server running?):")
                 print(f"    Stderr: {result.stderr.strip()}")
@@ -134,3 +136,41 @@ class OllamaInjector(BaseInjector):
         except Exception as e:
             print(f"[-] Failure building local Ollama Modelfile: {e}")
             return False
+
+    def update_continue_config(self, full_system):
+        """Updates Continue.dev's config.yaml with the compiled Vespera system prompt."""
+        try:
+            import yaml
+            continue_config_path = os.path.expanduser(r"~\.continue\config.yaml")
+            if not os.path.exists(continue_config_path):
+                print("[-] Continue.dev config.yaml not found at default path.")
+                return False
+                
+            with open(continue_config_path, 'r', encoding='utf-8') as f:
+                config = yaml.safe_load(f)
+                
+            updated = False
+            if config and "models" in config:
+                for model in config["models"]:
+                    if model.get("name") == "Vespera Caligo (Local)":
+                        # Remove the old systemPrompt direct key if present
+                        model.pop("systemPrompt", None)
+                        # Set under chatOptions baseSystemMessage
+                        if "chatOptions" not in model:
+                            model["chatOptions"] = {}
+                        model["chatOptions"]["baseSystemMessage"] = full_system
+                        updated = True
+                        break
+                        
+            if updated:
+                with open(continue_config_path, 'w', encoding='utf-8') as f:
+                    yaml.safe_dump(config, f, allow_unicode=True, sort_keys=False)
+                print("[+] Successfully synced Vespera system prompt to Continue.dev config.yaml!")
+                return True
+            else:
+                print("[-] Could not find 'Vespera Caligo (Local)' in Continue.dev config.yaml.")
+                return False
+        except Exception as e:
+            print(f"[-] Error syncing system prompt to Continue.dev config.yaml: {e}")
+            return False
+
