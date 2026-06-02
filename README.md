@@ -1,90 +1,46 @@
-# 🚀 Universal Local Memory (ULM) — Context Bridge
+# Antigravity Overdrive Sync (Universal Local Memory)
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python: 3.11+](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/)
-[![Database: SQLite](https://img.shields.io/badge/Database-SQLite-green.svg)](https://www.sqlite.org/)
-
-A high-performance, ultra-lightweight, and zero-footprint local semantic memory pipeline. ULM extracts unstructured chat transcripts across developer environments (like Google Antigravity), normalizes them into a local structured SQLite database, and dynamically injects distilled context payloads into active AI coding interfaces (like Continue.dev and local Ollama models) without causing persona drift.
+Welcome! This is a local, multi-threaded pipeline built to grab my AI chat histories, process them using the Gemini API, and inject structured milestone summaries straight into a local markdown system document (`D:\GEMINI.md`). It also keeps a persistent record of everything inside a local SQLite state database.
 
 ---
 
-## 📊 Telemetry & Benchmark Results
+## ⚠️ Fair Warning: I Am Learning As I Go!
 
-Verified under a high-volume concurrency stress test containing **1,000 distinct chat sessions, 10,000 message logs, and 5,000 duplicate injection attempts**:
+Let's be completely honest: **I don't entirely know what the hell I am doing yet.** I only started diving into Python, databases, and Git very recently. This project is my hands-on sandbox for learning how to build local AI data pipelines. Because of that:
+- The code is probably messy, unconventional, or violates some standard Python paradigms.
+- I am figuring out multi-threading, database locks, and API handling on the fly.
+- There are definitely things here that can be optimized, refactored, or completely rewritten.
 
-| Metric | Benchmark Result | Performance Verdict |
-| --- | --- | --- |
-| **Peak Memory Allocation** | **0.155 MB** (159 KB) | **Ultra-Lightweight** (99% less overhead than monolithic YAML/JSON parsers) |
-| **Context Query Latency** | **7.517 ms** | **Instantaneous** (sub-10ms joins and sorting under heavy database load) |
-| **Storage Footprint** | **2.63 MB** (Indexed SQLite) | **Highly Compressed** (optimized index nodes and structural normalization) |
-| **Idempotence Rate** | **100% Deduplication** | **Stable Signatures** (skipped 5,000 identical messages silently) |
+I am not trying to pretend this is a polished enterprise application—it's a raw, functional tool running on my personal workstation iron that I am actively trying to harden.
 
 ---
 
-## 🧠 System Architecture
+## 🤝 I Genuinely Want Your Help & Critiques!
 
-```mermaid
-graph TD
-    A[Unstructured logs / Transcripts] -->|Stage 1: Extract & Transform| B[parsers/antigravity.py]
-    B -->|Content-Derived SHA-256 Hashing| C[core/database.py SQLite DB]
-    C -->|Stage 2: Idempotent Insertion / Ignore| D[(sync_state.db)]
-    
-    E[CLI Query / Background Cron] -->|Stage 3: get-context --platform| F[core/adapters.py]
-    D -->|Indexed Read| F
-    
-    F -->|ContinueConfigAdapter| G[config.yaml System Prompt]
-    F -->|OllamaModelfileAdapter| H[Ollama Modelfile SYSTEM]
-    F -->|GeminiMarkdownAdapter| I[Gemini API Markdown Payload]
-```
+If you are an experienced developer, a Python wizard, or just someone who likes optimizing data pipelines, **please tear this code apart.** I am incredibly open to constructive criticism, brutal code reviews, and mentorship.
+
+I would love your help, suggestions, or pull requests regarding:
+1. **Code Architecture & Cleanup:** Better ways to structure my classes, handle imports, or separate concerns.
+2. **Dynamic Rate Limiting:** Right now, I'm using a brute-force `time.sleep(2.0)` inside my thread loop to avoid hitting Gemini's Free Tier 15 RPM limit. I'd love to transition this to a proper asynchronous token-bucket rate limiter.
+3. **Database Performance:** Any tips on making sure my SQLite engine (currently running in WAL mode with a custom exponential backoff loop) is completely bulletproof under high-concurrency workloads.
+4. **Async Migration:** Moving the entire network/file pipeline from synchronous `urllib` threads over to a clean async architecture.
 
 ---
 
-## ✨ Core Features
+## 🚀 How to Look Around
 
-* **Lightweight SQLite Caching Layer:** Replaces high-overhead monolithic file parses with a normalized, indexed relational database (`sync_state.db`) for near-zero RAM operations.
-* **Deterministic Hashing Deduplication:** Generates stable, content-derived signatures (`session_id + role + content + timestamp`) to safely ignore duplicate chat logs across multiple sync interval runs.
-* **Pluggable Adapter Pattern:** Modular, object-oriented adapter architecture easily formats context payloads dynamically for **Continue.dev**, **Ollama**, or **Gemini Markdown** envelopes.
-* **Zero-Persona-Drift Containment:** Strictly wraps dynamic system memory ledgers in isolated XML containers, keeping AI character behavior completely distinct from factual query context.
-* **Headless Background Automation:** Native trigger script integrations with the Windows Task Scheduler allow background cron syncing without manual intervention.
+Because this repository enforces a strict security perimeter via `.gitignore`, my personal API keys, private database files (`sync_state.db`), and personal markdown logs are completely excluded. 
 
----
+You are looking at a clean, sterile engine blueprint:
+- `main.py`: The central execution runner.
+- `core/engine.py`: Handles database operations, initialization, and the transactional write backoff loops.
+- `injectors/gemini_md.py`: Connects to the Gemini API, manages payload structures, and sets request time limits.
 
-## 🛠️ Installation & Setup
+### Getting Involved
 
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/Pipe5linger/antigravity-overdrive-sync.git
-   cd antigravity-overdrive-sync
-   ```
+If you spot a bug, see a line of code that makes you cringe, or have an idea on how to make this better:
+- Open an **Issue** with your feedback or critique.
+- Drop a thought in the **Discussions** tab.
+- Submit a **Pull Request**—I would love to study your code changes!
 
-2. **Initialize the SQLite Database & Run the Pipeline:**
-   ```bash
-   python main.py sync
-   ```
-
-3. **Query Your Local AI Memory Context on the Fly:**
-   ```bash
-   python main.py get-context --platform gemini
-   ```
-
-4. **Automate in the Background (Windows Task Scheduler):**
-   Run this single command in an administrator PowerShell to schedule ULM to sync hourly:
-   ```powershell
-   schtasks /create /tn "ULM_Sync_Job" /tr "D:\AI\Projects\antigravity-overdrive-sync\sync.bat" /sc hourly /mo 1 /F
-   ```
-
----
-
-## 📖 About the Project & Journey
-
-I started working with AI about two years ago, knowing absolutely **nothing** about software engineering, terminal interfaces, or command-line scripting. I didn't come from a traditional computer science background. I learned by doing, breaking things, asking questions, and building.
-
-This project is the result of that journey: a practical, high-performance context tool designed to solve my own workflow friction when switching between local offline coders and remote APIs. It is proof that if you focus on the fundamentals (resource limits, data integrity, modular patterns, and performance metrics), you can transition from zero to designing system-level pipelines in a couple of years.
-
-It isn't perfect, and it isn't enterprise-scale, but it is **mine**, it works beautifully under load, and it is fully open-source.
-
----
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+Thank you for stopping by and helping a self-taught dev build cleaner iron!
