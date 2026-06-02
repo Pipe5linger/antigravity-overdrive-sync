@@ -1,5 +1,6 @@
 import os
 import sys
+import time
 import yaml
 from datetime import datetime
 
@@ -63,25 +64,42 @@ class ULMEngine:
         current_state["metadata"]["last_updated"] = datetime.now().isoformat()
         current_state["metadata"]["total_chats"] = len(updated_chats)
         current_state["chats"] = updated_chats
-        
         return current_state, mutations
-        
-    def commit_atomic_write(self, state_data):
-        """Atomically overwrites the database back to disk using a temp-file swap."""
+
+    def commit_atomic_write(self, state_data, max_retries=5):
+        """Atomically overwrites the database back to disk using a temp-file swap with backoff."""
+        import random
         temp_target = f"{self.target_yaml}.tmp"
-        try:
-            with open(temp_target, 'w', encoding='utf-8') as f:
-                yaml.dump(state_data, f, allow_unicode=True, sort_keys=False, default_flow_style=False)
-            
-            if os.path.exists(self.target_yaml):
-                os.remove(self.target_yaml)
-            os.rename(temp_target, self.target_yaml)
-            return True
-        except Exception as e:
-            print(f"[-] Write failure during atomic swap: {e}", file=sys.stderr)
-            if os.path.exists(temp_target):
+        
+        for attempt in range(max_retries):
+            try:
+                # 1. Write data out safely to the hidden staging file
+                with open(temp_target, 'w', encoding='utf-8') as f:
+                    yaml.dump(state_data, f, allow_unicode=True, sort_keys=False, default_flow_style=False)
+                
+                # 2. Perform the safe swap
+                if os.path.exists(self.target_yaml):
+                    os.remove(self.target_yaml)
+                os.rename(temp_target, self.target_yaml)
+                return True
+                
+            except Exception as e:
+                # If a thread collides or Google Drive locks the file, catch it here
+                if attempt == max_retries - 1:
+                    print(f"[-] Definitively failed to write state after {max_retries} attempts: {e}", file=sys.stderr)
+                    if os.path.exists(temp_target):
+                        try:
+                            os.remove(temp_target)
+                        except:
+                            pass
+                    return False
+                
+                # Calculate a progressive wait time: 2^attempt + random decimal fraction
+                sleep_time = (2 ** attempt) + random.uniform(0, 1)
+                print(f"[!] File lock or collision detected. Retrying swap in {sleep_time:.2f} seconds...", file=sys.stderr)
+                time.sleep(sleep_time)
                 try:
                     os.remove(temp_target)
                 except:
                     pass
-            return False
+        return False

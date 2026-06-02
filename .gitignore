@@ -15,3 +15,9 @@ Antigravity outputs/
 .env
 .env.local
 .env.*
+sync_state.db
+*.db
+*.sqlite
+*.sqlite3
+*-wal
+*-shm

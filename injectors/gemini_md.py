@@ -70,7 +70,7 @@ class GeminiMdInjector(BaseInjector):
                 headers={'Content-Type': 'application/json'},
                 method='POST'
             )
-            with urllib.request.urlopen(req, timeout=10) as response:
+            with urllib.request.urlopen(req, timeout=90) as response:
                 res_data = json.loads(response.read().decode('utf-8'))
                 raw_text = res_data['candidates'][0]['content']['parts'][0]['text'].strip()
                 return raw_text.replace("\n", " ").strip()
