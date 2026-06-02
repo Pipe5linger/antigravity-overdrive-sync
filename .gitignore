@@ -21,3 +21,4 @@ sync_state.db
 *.sqlite3
 *-wal
 *-shm
+Modelfile.local
