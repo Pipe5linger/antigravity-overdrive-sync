@@ -98,8 +98,8 @@ def main():
     register_plugins()
     
     parser = argparse.ArgumentParser(description="Universal Local Memory (ULM) Agent Pipeline")
-    parser.add_argument("command", nargs="?", choices=["sync", "get-context"], default="sync",
-                        help="Command to run: 'sync' (default) to run the full pipeline, or 'get-context' to query SQLite memory.")
+    parser.add_argument("command", nargs="?", choices=["sync", "get-context", "tui"], default="sync",
+                        help="Command to run: 'sync' (default) to run the full pipeline, 'get-context' to query SQLite memory, or 'tui' for interactive dashboard.")
     parser.add_argument("--parser", choices=list(PARSERS.keys()), default="antigravity",
                         help="Select the log extraction parser plugin")
     parser.add_argument("--injector", choices=list(INJECTORS.keys()), default="gemini_md",
@@ -132,6 +132,11 @@ def main():
             adapter = GeminiMarkdownAdapter(db)
             
         print(adapter.format_context())
+        sys.exit(0)
+    elif args.command == "tui":
+        from tui.dashboard import ULMTUIDashboard
+        dashboard = ULMTUIDashboard()
+        dashboard.start()
         sys.exit(0)
 
     # Otherwise, execute default sync pipeline

@@ -78,8 +78,8 @@ class GeminiMdInjector(BaseInjector):
         import urllib.error
         import time
         
-        max_retries = 3
-        backoff = 4.0
+        max_retries = 4
+        backoff = 6.0
         for attempt in range(max_retries):
             try:
                 req = urllib.request.Request(
@@ -154,7 +154,9 @@ class GeminiMdInjector(BaseInjector):
                             if msgs:
                                 last_msg = msgs[-1]
                                 last_turn = f"{last_msg.get('role')}: {last_msg.get('content')[:120]}..."
-                            summary = last_turn
+                            summary = f"[Fallback] {last_turn}"
+                            c.execute("UPDATE sessions SET summary = ? WHERE session_id = ?", (summary, session_id))
+                            self.state_mutated = True
                         
                         import time
                         time.sleep(2.0)
