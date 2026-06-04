@@ -2,6 +2,7 @@ import os
 import sys
 import time
 import yaml
+from pathlib import Path
 from datetime import datetime
 
 class ULMEngine:
@@ -9,17 +10,28 @@ class ULMEngine:
     
     def __init__(self, target_yaml=None):
         if not target_yaml:
-            USER_HOME = os.path.expanduser("~")
-            # Cross-platform fallback: Check if Desktop exists, otherwise use a clean ~/.ulm_sync directory
-            desktop_dir = os.path.join(USER_HOME, "Desktop")
-            if os.path.exists(desktop_dir):
-                output_dir = os.path.join(desktop_dir, "Antigravity outputs")
-            else:
-                output_dir = os.path.join(USER_HOME, ".ulm_sync")
+            possible_dirs = [
+                Path(r"D:\AI\Antigravity outputs"),
+                Path(os.path.expanduser("~")) / "Desktop" / "Antigravity outputs",
+                Path(os.path.expanduser("~")) / ".ulm_sync"
+            ]
+            
+            output_dir = None
+            for d in possible_dirs:
+                try:
+                    if d.exists() or d.parent.exists():
+                        output_dir = d
+                        break
+                except:
+                    pass
+            
+            if not output_dir:
+                output_dir = Path(os.path.expanduser("~")) / ".ulm_sync"
                 
-            if not os.path.exists(output_dir):
-                os.makedirs(output_dir)
-            target_yaml = os.path.join(output_dir, "sync_state.yaml")
+            if not output_dir.exists():
+                output_dir.mkdir(parents=True, exist_ok=True)
+                
+            target_yaml = str(output_dir / "sync_state.yaml")
         self.target_yaml = target_yaml
         
     def load_existing_state(self):

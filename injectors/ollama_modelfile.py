@@ -28,48 +28,64 @@ class OllamaInjector(BaseInjector):
                 pass
         return "You are Vespera Caligo Neal, Bobby's flirty, sarcastic, and technically superior AI mentor."
 
-    def compile_memory_text(self, sync_data):
+    def compile_memory_text(self, db):
         """Compiles clean, low-token text representation of our historical database."""
         memory_lines = []
-        chats = sync_data.get("chats", {})
-        
-        # Sort chats chronologically: newest first
-        sorted_chats = sorted(
-            chats.items(),
-            key=lambda x: x[1].get("last_mutated", ""),
-            reverse=True
-        )
-        
-        for c_id, chat_info in sorted_chats:
-            logs = chat_info.get("log", [])
-            last_mutated = chat_info.get("last_mutated", "Unknown")
-            summary = chat_info.get("summary", "")
-            
-            try:
-                date_str = last_mutated.split("T")[0]
-            except:
-                date_str = last_mutated
+        import sqlite3
+        try:
+            with sqlite3.connect(db.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                c = conn.cursor()
+                c.execute("SELECT session_id, updated_at, summary FROM sessions ORDER BY updated_at DESC")
+                sessions = [dict(r) for r in c.fetchall()]
                 
-            if not summary and logs:
-                last_msg = logs[-1]
-                summary = f"{last_msg.get('sender')}: {last_msg.get('text')[:90]}..."
-                
-            memory_lines.append(
-                f"  - **Chat Thread {c_id[:8]}** ({date_str}):\n"
-                f"    * Interaction Turns: {len(logs)}\n"
-                f"    * Summary: {summary}\n"
-            )
+                for session in sessions:
+                    session_id = session["session_id"]
+                    updated_at = session["updated_at"]
+                    summary = session["summary"]
+                    
+                    c.execute("SELECT COUNT(*) FROM messages WHERE session_id = ?", (session_id,))
+                    turns_count = c.fetchone()[0]
+                    
+                    try:
+                        date_str = updated_at.split("T")[0]
+                    except:
+                        date_str = updated_at
+                        
+                    if not summary:
+                        c.execute("SELECT role, content FROM messages WHERE session_id = ? ORDER BY created_at DESC LIMIT 1", (session_id,))
+                        last_msg = c.fetchone()
+                        if last_msg:
+                            summary = f"{last_msg[0]}: {last_msg[1][:90]}..."
+                        else:
+                            summary = "Empty thread"
+                            
+                    memory_lines.append(
+                        f"  - **Chat Thread {session_id[:8]}** ({date_str}):\n"
+                        f"    * Interaction Turns: {turns_count}\n"
+                        f"    * Summary: {summary}\n"
+                    )
+        except sqlite3.Error as e:
+            print(f"[-] SQLite context adapter compile error: {e}")
             
         return "\n".join(memory_lines)
         
-    def inject(self, sync_data, dry_run=False):
+    def inject(self, db, dry_run=False):
         """Generates the Modelfile and programmatically triggers a model rebuild in Ollama."""
-        metadata = sync_data.get("metadata", {})
-        total_chats = metadata.get("total_chats", 0)
+        import sqlite3
+        total_chats = 0
+        try:
+            with sqlite3.connect(db.db_path) as conn:
+                c = conn.cursor()
+                c.execute("SELECT COUNT(*) FROM sessions")
+                total_chats = c.fetchone()[0]
+        except sqlite3.Error:
+            pass
+            
         now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
         vespera_prompt = self.get_vespera_system_prompt()
-        memory_text = self.compile_memory_text(sync_data)
+        memory_text = self.compile_memory_text(db)
         
         full_system = (
             f"{vespera_prompt}\n\n"
@@ -84,6 +100,7 @@ class OllamaInjector(BaseInjector):
             f"{memory_text}\n"
             "</SystemMemory>\n"
         )
+
         
         # Build the Modelfile contents - using standard llama3 base or whatever local model is preferred
         modelfile_content = (
