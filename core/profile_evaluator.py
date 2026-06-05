@@ -5,6 +5,7 @@ import urllib.request
 import urllib.error
 import sqlite3
 import datetime
+import time
 
 class ProfileEvaluator:
     def __init__(self, api_key=None):
@@ -80,34 +81,46 @@ class ProfileEvaluator:
             }
         }
 
-        try:
-            req = urllib.request.Request(
-                url,
-                data=json.dumps(payload).encode('utf-8'),
-                headers={'Content-Type': 'application/json'},
-                method='POST'
-            )
-            with urllib.request.urlopen(req, timeout=90) as response:
-                res_data = json.loads(response.read().decode('utf-8'))
-                raw_text = res_data['candidates'][0]['content']['parts'][0]['text'].strip()
-                result = json.loads(raw_text)
-                
-                metrics = result.get("metrics", [])
-                if not metrics:
-                    return True
-                
-                # 2. Write metrics to database
-                for m in metrics:
-                    category = m.get("category")
-                    name = m.get("name")
-                    description = m.get("description")
-                    confidence = m.get("confidence", 0.5)
+        max_retries = 4
+        backoff = 6.0
+        for attempt in range(max_retries):
+            try:
+                req = urllib.request.Request(
+                    url,
+                    data=json.dumps(payload).encode('utf-8'),
+                    headers={'Content-Type': 'application/json'},
+                    method='POST'
+                )
+                with urllib.request.urlopen(req, timeout=90) as response:
+                    res_data = json.loads(response.read().decode('utf-8'))
+                    raw_text = res_data['candidates'][0]['content']['parts'][0]['text'].strip()
+                    result = json.loads(raw_text)
                     
-                    if category and name and description:
-                        db.upsert_profile_metric(category, name, description, confidence)
-                print(f"[+] ProfileEvaluator: Successfully evaluated session {session_id[:8]} and extracted {len(metrics)} profile metrics.")
-                return True
-                
-        except Exception as e:
-            print(f"[-] ProfileEvaluator: Evaluation failed for session {session_id[:8]}: {e}", file=sys.stderr)
-            return False
+                    metrics = result.get("metrics", [])
+                    if not metrics:
+                        return True
+                    
+                    # 2. Write metrics to database
+                    for m in metrics:
+                        category = m.get("category")
+                        name = m.get("name")
+                        description = m.get("description")
+                        confidence = m.get("confidence", 0.5)
+                        
+                        if category and name and description:
+                            db.upsert_profile_metric(category, name, description, confidence)
+                    print(f"[+] ProfileEvaluator: Successfully evaluated session {session_id[:8]} and extracted {len(metrics)} profile metrics.")
+                    return True
+            except urllib.error.HTTPError as he:
+                if he.code == 429:
+                    if attempt < max_retries - 1:
+                        print(f"[!] ProfileEvaluator rate limited (429) for session {session_id[:8]}. Retrying in {backoff} seconds...")
+                        time.sleep(backoff)
+                        backoff *= 2
+                        continue
+                print(f"[-] ProfileEvaluator: API HTTP Error {he.code} for session {session_id[:8]}: {he.reason}", file=sys.stderr)
+                return False
+            except Exception as e:
+                print(f"[-] ProfileEvaluator: Evaluation failed for session {session_id[:8]}: {e}", file=sys.stderr)
+                return False
+        return False
