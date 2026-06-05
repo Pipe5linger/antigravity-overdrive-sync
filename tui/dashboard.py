@@ -106,6 +106,8 @@ class ULMTUIDashboard:
         menu_text.append("List Stored Memory Facts\n", style="white")
         menu_text.append("[L] ", style="bold green")
         menu_text.append("Show Recent Synced Messages\n", style="white")
+        menu_text.append("[P] ", style="bold green")
+        menu_text.append("List Developer Profile Metrics\n", style="white")
         menu_text.append("[Q] ", style="bold red")
         menu_text.append("Exit Control Center", style="white")
 
@@ -254,6 +256,31 @@ class ULMTUIDashboard:
         self.console.print("\n[bold green]Press any key to return to Dashboard...[/bold green]")
         msvcrt.getch()
 
+    def view_profile(self):
+        self.console.clear()
+        self.console.print(Panel(Align.center(Text("👤 DEVELOPER PROGRESS PROFILE 👤", style="bold green")), border_style="green"))
+        
+        table = Table(expand=True)
+        table.add_column("Category", style="cyan", width=12)
+        table.add_column("Name", style="yellow", width=22)
+        table.add_column("Description", style="white")
+        table.add_column("Confidence", style="green", width=12)
+        table.add_column("Freq", style="magenta", width=6)
+        table.add_column("Last Observed", style="blue")
+
+        try:
+            profile = self.db.get_developer_profile()
+            for r in profile:
+                conf_str = f"{r['confidence'] * 100:.1f}%" if r['confidence'] else "N/A"
+                last_seen_str = r['last_seen'].split(".")[0] if r['last_seen'] else "N/A"
+                table.add_row(r['category'].upper(), r['name'], r['description'], conf_str, str(r['frequency']), last_seen_str)
+        except Exception as e:
+            self.console.print(f"[-] Error reading developer profile: {e}", style="red")
+
+        self.console.print(table)
+        self.console.print("\n[bold green]Press any key to return to Dashboard...[/bold green]")
+        msvcrt.getch()
+
     def start(self):
         # Auto-initialize DB schema just in case
         self.db.initialize_db()
@@ -276,6 +303,8 @@ class ULMTUIDashboard:
                 self.view_facts()
             elif key == 'l':
                 self.view_messages()
+            elif key == 'p':
+                self.view_profile()
             elif key == 'q':
                 self.console.print("\n[bold magenta]Exiting Vespera Control Center. Keep the momentum high. 🚀[/bold magenta]\n")
                 break

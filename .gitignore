@@ -22,3 +22,4 @@ sync_state.db
 *-wal
 *-shm
 Modelfile.local
+*.prof

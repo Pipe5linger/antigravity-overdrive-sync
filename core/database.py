@@ -24,12 +24,12 @@ class ULMDatabase:
                     );
                 """)
                 
-                # Check current version, default to 2
+                # Check current version, default to 3
                 c.execute("SELECT version FROM schema_version")
                 row = c.fetchone()
                 if not row:
-                    c.execute("INSERT INTO schema_version (version) VALUES (2)")
-                    current_version = 2
+                    c.execute("INSERT INTO schema_version (version) VALUES (3)")
+                    current_version = 3
                 else:
                     current_version = row[0]
                 
@@ -70,18 +70,46 @@ class ULMDatabase:
                         updated_at TEXT
                     );
                 """)
+                c.execute("""
+                    CREATE TABLE IF NOT EXISTS developer_profile (
+                        metric_id TEXT PRIMARY KEY,
+                        category TEXT,
+                        name TEXT UNIQUE,
+                        description TEXT,
+                        confidence REAL,
+                        frequency INTEGER DEFAULT 1,
+                        first_seen TEXT,
+                        last_seen TEXT
+                    );
+                """)
                 
-                # Database migrations: If schema version was 1, upgrade
+                # Database migrations: Upgrade path
                 if current_version < 2:
                     try:
                         c.execute("ALTER TABLE sessions ADD COLUMN summary TEXT;")
-                        c.execute("UPDATE schema_version SET version = 2;")
                     except sqlite3.OperationalError:
-                        # Column might already exist
+                        pass
+                
+                if current_version < 3:
+                    try:
+                        c.execute("""
+                            CREATE TABLE IF NOT EXISTS developer_profile (
+                                metric_id TEXT PRIMARY KEY,
+                                category TEXT,
+                                name TEXT UNIQUE,
+                                description TEXT,
+                                confidence REAL,
+                                frequency INTEGER DEFAULT 1,
+                                first_seen TEXT,
+                                last_seen TEXT
+                            );
+                        """)
+                        c.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (3)")
+                    except sqlite3.OperationalError:
                         pass
                 
                 conn.commit()
-            print("[+] ULM SQLite Database successfully initialized with WAL Mode and Schema Version 2.")
+            print("[+] ULM SQLite Database successfully initialized with WAL Mode and Schema Version 3.")
         except sqlite3.Error as e:
             print(f"[-] Error initializing database: {e}")
 
@@ -176,7 +204,6 @@ class ULMDatabase:
         except sqlite3.Error as e:
             print(f"[-] Error during batch SQLite ingestion: {e}")
             return 0, 0
-
 
     def upsert_session(self, session_id, source, topics, summary=None, conn=None):
         now = datetime.datetime.now(datetime.timezone.utc).isoformat()
@@ -290,4 +317,47 @@ class ULMDatabase:
                 return results
         except sqlite3.Error as e:
             print(f"[-] Error retrieving recent context: {e}")
+            return []
+
+    def upsert_profile_metric(self, category, name, description, confidence, conn=None):
+        import hashlib
+        now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        metric_id = hashlib.sha256(f"{category}:{name}".encode('utf-8')).hexdigest()[:16]
+        
+        def _execute(connection):
+            c = connection.cursor()
+            # Check if metric already exists to update frequency and last_seen
+            c.execute("SELECT first_seen, frequency FROM developer_profile WHERE metric_id = ?", (metric_id,))
+            row = c.fetchone()
+            if row:
+                first_seen = row[0]
+                frequency = row[1] + 1
+            else:
+                first_seen = now
+                frequency = 1
+                
+            c.execute("""
+                INSERT OR REPLACE INTO developer_profile (metric_id, category, name, description, confidence, frequency, first_seen, last_seen)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (metric_id, category, name, description, confidence, frequency, first_seen, now))
+            
+        if conn:
+            _execute(conn)
+        else:
+            try:
+                with self.get_connection() as local_conn:
+                    _execute(local_conn)
+                    local_conn.commit()
+            except sqlite3.Error as e:
+                print(f"[-] Error upserting developer profile metric: {e}")
+
+    def get_developer_profile(self):
+        try:
+            with self.get_connection() as conn:
+                conn.row_factory = sqlite3.Row
+                c = conn.cursor()
+                c.execute("SELECT category, name, description, confidence, frequency, first_seen, last_seen FROM developer_profile ORDER BY category, last_seen DESC")
+                return [dict(r) for r in c.fetchall()]
+        except sqlite3.Error as e:
+            print(f"[-] Error retrieving developer profile: {e}")
             return []

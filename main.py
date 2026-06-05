@@ -161,6 +161,17 @@ def main():
             print(f"[+] Dry run: ETL stage successfully staged {len(new_logs)} session modifications.")
         else:
             db.import_raw_logs(new_logs)
+            
+            # Run profile evaluation on synced sessions
+            try:
+                from core.profile_evaluator import ProfileEvaluator
+                evaluator = ProfileEvaluator()
+                print("[*] Evaluating session profile metrics...")
+                for session in new_logs:
+                    session_id = session["chat_id"]
+                    evaluator.evaluate_session(db, session_id)
+            except Exception as pe_err:
+                print(f"[-] Profile evaluation warning: {pe_err}")
     else:
         print("[*] ETL Stage Complete: No new session modifications detected.")
         

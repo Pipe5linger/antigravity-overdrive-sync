@@ -45,10 +45,10 @@ class TestULMDatabase(unittest.TestCase):
             self.assertIn("facts", tables)
             self.assertIn("preferences", tables)
 
-            # Verify Schema Version is initialized to 2
+            # Verify Schema Version is initialized to 3
             c.execute("SELECT version FROM schema_version;")
             version = c.fetchone()[0]
-            self.assertEqual(version, 2)
+            self.assertEqual(version, 3)
 
     def test_session_upsert(self):
         """Verifies that sessions are successfully inserted and updated."""
