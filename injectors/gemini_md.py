@@ -39,6 +39,7 @@ class GeminiMdInjector(BaseInjector):
         if not target_file:
             # Dynamically resolve GEMINI.md location for cross-platform compatibility
             possible_paths = [
+                Path(r"E:\Google Drive\My Drive\GEMINI.md"),
                 Path(r"D:\GEMINI.md"),
                 Path(os.path.expanduser("~")) / "GEMINI.md",
                 Path(__file__).resolve().parents[2] / "GEMINI.md"
@@ -82,7 +83,7 @@ class GeminiMdInjector(BaseInjector):
         if len(full_transcript) > 50000:
             full_transcript = full_transcript[-50000:]
             
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key={api_key}"
         
         prompt = (
             "You are a technical archivist. Analyze the following chat log between a developer (Pilot) and an AI companion (Vespera). "

@@ -79,7 +79,7 @@ class ProfileEvaluator:
         if len(dialogue_text) > 40000:
             dialogue_text = dialogue_text[-40000:]
             
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={self.api_key}"
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key={self.api_key}"
 
         prompt = (
             "You are a developer behavioral evaluator. Analyze this dialogue between a developer (Pilot) and their AI mentor (Vespera).\n"
