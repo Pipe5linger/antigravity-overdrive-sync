@@ -1,9 +1,34 @@
 import os
 import sys
+import time
 import yaml
 from pathlib import Path
 from datetime import datetime
 from injectors.base import BaseInjector
+
+class TokenBucket:
+    def __init__(self, capacity, fill_rate):
+        self.capacity = capacity
+        self.fill_rate = fill_rate
+        self.tokens = capacity
+        self.last_fill = time.time()
+
+    def consume(self, tokens=1):
+        now = time.time()
+        elapsed = now - self.last_fill
+        self.last_fill = now
+        self.tokens = min(self.capacity, self.tokens + elapsed * self.fill_rate)
+        
+        if self.tokens >= tokens:
+            self.tokens -= tokens
+            return True
+            
+        required_tokens = tokens - self.tokens
+        wait_time = required_tokens / self.fill_rate
+        time.sleep(wait_time)
+        self.tokens = 0
+        self.last_fill = time.time()
+        return True
 
 class GeminiMdInjector(BaseInjector):
     """Atomically writes high-density memory summaries to chatlog.yaml and ensures GEMINI.md has a valid pointer."""
@@ -27,6 +52,7 @@ class GeminiMdInjector(BaseInjector):
                 target_file = str(possible_paths[0])
                 
         super().__init__(target_file)
+        self.limiter = TokenBucket(capacity=5.0, fill_rate=0.25)
         
     def generate_gemini_summary(self, logs):
         """Zero-dependency HTTP REST call to Gemini API for high-fidelity technical summarization."""
@@ -56,7 +82,7 @@ class GeminiMdInjector(BaseInjector):
         if len(full_transcript) > 50000:
             full_transcript = full_transcript[-50000:]
             
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
         
         prompt = (
             "You are a technical archivist. Analyze the following chat log between a developer (Pilot) and an AI companion (Vespera). "
@@ -145,6 +171,7 @@ class GeminiMdInjector(BaseInjector):
                     if not summary:
                         print(f"[*] Compiling dynamic Gemini memory summary for chat {session_id[:8]}...")
                         logs_param = [{"sender": m["role"], "text": m["content"]} for m in msgs]
+                        self.limiter.consume(1)
                         summary = self.generate_gemini_summary(logs_param)
                         if summary:
                             c.execute("UPDATE sessions SET summary = ? WHERE session_id = ?", (summary, session_id))
@@ -157,9 +184,6 @@ class GeminiMdInjector(BaseInjector):
                             summary = f"[Fallback] {last_turn}"
                             c.execute("UPDATE sessions SET summary = ? WHERE session_id = ?", (summary, session_id))
                             self.state_mutated = True
-                        
-                        import time
-                        time.sleep(2.0)
                     
                     compiled_sessions.append({
                         "id": session_id[:8],
