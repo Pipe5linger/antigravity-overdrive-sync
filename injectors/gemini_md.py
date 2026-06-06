@@ -261,7 +261,7 @@ class GeminiMdInjector(BaseInjector):
                 f"  System Memory Ledger is maintained dynamically in:\n"
                 f"  [chatlog.yaml](file:///{yaml_file.as_posix()}) (created in the same directory as this protocol file).\n\n"
                 f"  INSTRUCTIONS:\n"
-                f"  At the beginning of every session, you MUST read the last 2-3 chat session entries in chatlog.yaml to retrieve the context of the previous conversations.\n"
+                f"  At the beginning of every session, you MUST read the last 5 chat session entries in chatlog.yaml to retrieve the context of the previous conversations.\n"
                 f"</SystemMemory>\n"
             )
             
