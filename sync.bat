@@ -69,7 +69,7 @@ if %errorlevel% neq 0 (
     echo ======================================================================
     echo [+] ULM pipeline successfully completed execution.
     echo.
-    echo > [!IMPORTANT]
+    echo ^> [!IMPORTANT]
     echo   Active browser sessions (Gems / Chat tabs) will NOT reload dynamically.
     echo   You MUST refresh your browser window or start a new prompt thread
     echo   for cloud-hosted instances to parse the updated chatlog.yaml context.
