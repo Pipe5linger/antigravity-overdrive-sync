@@ -40,7 +40,8 @@ class ULMDatabase:
                         created_at TEXT,
                         updated_at TEXT,
                         topics TEXT,
-                        summary TEXT
+                        summary TEXT,
+                        profiled_at TEXT
                     );
                 """)
                 c.execute("""
@@ -107,6 +108,12 @@ class ULMDatabase:
                         c.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (3)")
                     except sqlite3.OperationalError:
                         pass
+                
+                # Always ensure profiled_at column exists (safe migration)
+                try:
+                    c.execute("ALTER TABLE sessions ADD COLUMN profiled_at TEXT;")
+                except sqlite3.OperationalError:
+                    pass  # Column already exists
                 
                 conn.commit()
             print("[+] ULM SQLite Database successfully initialized with WAL Mode and Schema Version 3.")
@@ -361,3 +368,24 @@ class ULMDatabase:
         except sqlite3.Error as e:
             print(f"[-] Error retrieving developer profile: {e}")
             return []
+
+    def get_unprofiled_sessions(self):
+        """Returns session_ids that have not yet been profiled by the ProfileEvaluator."""
+        try:
+            with self.get_connection() as conn:
+                c = conn.cursor()
+                c.execute("SELECT session_id FROM sessions WHERE profiled_at IS NULL ORDER BY updated_at DESC")
+                return [row[0] for row in c.fetchall()]
+        except sqlite3.Error as e:
+            print(f"[-] Error fetching unprofiled sessions: {e}")
+            return []
+
+    def mark_session_profiled(self, session_id):
+        """Marks a session as profiled so it is skipped on future runs."""
+        now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        try:
+            with self.get_connection() as conn:
+                conn.execute("UPDATE sessions SET profiled_at = ? WHERE session_id = ?", (now, session_id))
+                conn.commit()
+        except sqlite3.Error as e:
+            print(f"[-] Error marking session as profiled: {e}")

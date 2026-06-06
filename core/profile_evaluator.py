@@ -35,6 +35,7 @@ class ProfileEvaluator:
     def __init__(self, api_key=None):
         self.api_key = api_key or os.getenv("GEMINI_API_KEY")
         self.limiter = TokenBucket(capacity=5.0, fill_rate=0.25)
+        self.quota_exhausted = False
         if not self.api_key:
             # Try parsing from .env
             from pathlib import Path
@@ -139,11 +140,9 @@ class ProfileEvaluator:
                     return True
             except urllib.error.HTTPError as he:
                 if he.code == 429:
-                    if attempt < max_retries - 1:
-                        print(f"[!] ProfileEvaluator rate limited (429) for session {session_id[:8]}. Retrying in {backoff} seconds...")
-                        time.sleep(backoff)
-                        backoff *= 2
-                        continue
+                    self.quota_exhausted = True
+                    print(f"[-] ProfileEvaluator: API quota exhausted (429) for session {session_id[:8]}. Halting.", file=sys.stderr)
+                    return False
                 print(f"[-] ProfileEvaluator: API HTTP Error {he.code} for session {session_id[:8]}: {he.reason}", file=sys.stderr)
                 return False
             except Exception as e:

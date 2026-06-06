@@ -162,14 +162,22 @@ def main():
         else:
             db.import_raw_logs(new_logs)
             
-            # Run profile evaluation on synced sessions
+            # Run profile evaluation only on sessions not yet profiled
             try:
                 from core.profile_evaluator import ProfileEvaluator
                 evaluator = ProfileEvaluator()
-                print("[*] Evaluating session profile metrics...")
-                for session in new_logs:
-                    session_id = session["chat_id"]
-                    evaluator.evaluate_session(db, session_id)
+                unprofiled = db.get_unprofiled_sessions()
+                if unprofiled:
+                    print(f"[*] Evaluating {len(unprofiled)} unprofiled session(s)...")
+                    for session_id in unprofiled:
+                        success = evaluator.evaluate_session(db, session_id)
+                        if success:
+                            db.mark_session_profiled(session_id)
+                        elif evaluator.quota_exhausted:
+                            print(f"[!] API quota exhausted. Stopping profile evaluation — will resume next sync.")
+                            break
+                else:
+                    print("[*] Profile evaluation: all sessions already profiled, skipping.")
             except Exception as pe_err:
                 print(f"[-] Profile evaluation warning: {pe_err}")
     else:
