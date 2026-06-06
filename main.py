@@ -162,24 +162,36 @@ def main():
         else:
             db.import_raw_logs(new_logs)
             
-            # Run profile evaluation only on sessions not yet profiled
+            # Run profile and fact evaluation on sessions not yet profiled
             try:
                 from core.profile_evaluator import ProfileEvaluator
+                from core.fact_extractor import FactExtractor
+                
                 evaluator = ProfileEvaluator()
+                extractor = FactExtractor()
+                
                 unprofiled = db.get_unprofiled_sessions()
                 if unprofiled:
                     print(f"[*] Evaluating {len(unprofiled)} unprofiled session(s)...")
                     for session_id in unprofiled:
-                        success = evaluator.evaluate_session(db, session_id)
-                        if success:
-                            db.mark_session_profiled(session_id)
-                        elif evaluator.quota_exhausted:
-                            print(f"[!] API quota exhausted. Stopping profile evaluation — will resume next sync.")
+                        # 1. Profile Evaluation
+                        prof_success = evaluator.evaluate_session(db, session_id)
+                        if evaluator.quota_exhausted:
+                            print(f"[!] API quota exhausted during profiling. Stopping evaluation pipeline.")
                             break
+                        
+                        # 2. Fact Extraction
+                        fact_success = extractor.extract_facts(db, session_id)
+                        if extractor.quota_exhausted:
+                            print(f"[!] API quota exhausted during fact extraction. Stopping evaluation pipeline.")
+                            break
+                            
+                        if prof_success and fact_success:
+                            db.mark_session_profiled(session_id)
                 else:
-                    print("[*] Profile evaluation: all sessions already profiled, skipping.")
+                    print("[*] Profile and fact evaluation: all sessions already profiled, skipping.")
             except Exception as pe_err:
-                print(f"[-] Profile evaluation warning: {pe_err}")
+                print(f"[-] Profile/Fact evaluation warning: {pe_err}")
     else:
         print("[*] ETL Stage Complete: No new session modifications detected.")
         

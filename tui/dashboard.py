@@ -262,12 +262,12 @@ class ULMTUIDashboard:
         self.console.print(Panel(Align.center(Text("👤 DEVELOPER PROGRESS PROFILE 👤", style="bold green")), border_style="green"))
         
         table = Table(expand=True)
-        table.add_column("Category", style="cyan", width=12)
-        table.add_column("Name", style="yellow", width=22)
-        table.add_column("Description", style="white")
+        table.add_column("Category", style="cyan")
+        table.add_column("Name", style="yellow")
+        table.add_column("Description", style="white", ratio=3)
         table.add_column("Confidence", style="green", width=12)
         table.add_column("Freq", style="magenta", width=6)
-        table.add_column("Last Observed", style="blue")
+        table.add_column("Last Observed", style="blue", width=20)
 
         try:
             profile = self.db.get_developer_profile()
