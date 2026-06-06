@@ -7,9 +7,34 @@ import sqlite3
 import datetime
 import time
 
+class TokenBucket:
+    def __init__(self, capacity, fill_rate):
+        self.capacity = capacity
+        self.fill_rate = fill_rate
+        self.tokens = capacity
+        self.last_fill = time.time()
+
+    def consume(self, tokens=1):
+        now = time.time()
+        elapsed = now - self.last_fill
+        self.last_fill = now
+        self.tokens = min(self.capacity, self.tokens + elapsed * self.fill_rate)
+        
+        if self.tokens >= tokens:
+            self.tokens -= tokens
+            return True
+            
+        required_tokens = tokens - self.tokens
+        wait_time = required_tokens / self.fill_rate
+        time.sleep(wait_time)
+        self.tokens = 0
+        self.last_fill = time.time()
+        return True
+
 class ProfileEvaluator:
     def __init__(self, api_key=None):
         self.api_key = api_key or os.getenv("GEMINI_API_KEY")
+        self.limiter = TokenBucket(capacity=5.0, fill_rate=0.25)
         if not self.api_key:
             # Try parsing from .env
             from pathlib import Path
@@ -54,7 +79,7 @@ class ProfileEvaluator:
         if len(dialogue_text) > 40000:
             dialogue_text = dialogue_text[-40000:]
             
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={self.api_key}"
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={self.api_key}"
 
         prompt = (
             "You are a developer behavioral evaluator. Analyze this dialogue between a developer (Pilot) and their AI mentor (Vespera).\n"
@@ -83,6 +108,7 @@ class ProfileEvaluator:
 
         max_retries = 4
         backoff = 6.0
+        self.limiter.consume(1)
         for attempt in range(max_retries):
             try:
                 req = urllib.request.Request(
