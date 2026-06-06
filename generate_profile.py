@@ -7,11 +7,9 @@ import urllib.error
 from pathlib import Path
 
 def load_api_key():
-    # Attempt to load from env
     key = os.getenv("GEMINI_API_KEY")
     if key:
         return key
-    # Fallback to loading from .env
     env_path = Path(__file__).resolve().parent / ".env"
     if env_path.exists():
         try:
@@ -25,34 +23,24 @@ def load_api_key():
             print(f"[-] Error reading .env file: {e}")
     return None
 
-def parse_questionnaire(filepath):
+def parse_markdown_questions(filepath):
     """
-    Parses the questionnaire file and extracts questions with their corresponding scale/choice and explanation answers.
+    Parses the template markdown to extract section and question layouts.
     """
     if not filepath.exists():
-        print(f"[-] Questionnaire file not found at: {filepath}")
+        print(f"[-] Template file not found at: {filepath}")
         return None
 
     with open(filepath, "r", encoding="utf-8") as f:
         content = f.read()
 
-    # Split into sections
     sections = re.split(r"\n##\s+", content)
     parsed_data = []
-    
-    # We want to extract the questions and responses.
-    # A question pattern usually looks like:
-    # d+. [Question text]
-    # [ SCALE/CHOICE: [answer] ] (or similar)
-    # [ WHY: [answer] ]
     
     question_regex = re.compile(
         r"(\d+\..*?)\n\s*\[\s*(?:SCALE|CHOICE)[^:]*:\s*(.*?)\s*\]\n\s*\[\s*WHY:\s*(.*?)\s*\]", 
         re.DOTALL
     )
-    
-    total_parsed = 0
-    answered_count = 0
     
     for section in sections:
         lines = section.strip().split("\n")
@@ -64,21 +52,11 @@ def parse_questionnaire(filepath):
         if matches:
             section_questions = []
             for q_text, val, why in matches:
-                total_parsed += 1
-                val = val.strip()
-                why = why.strip()
-                
-                # Check if it has been answered (i.e. not empty and not default blank)
-                is_answered = False
-                if val or why:
-                    is_answered = True
-                    answered_count += 1
-                
                 section_questions.append({
                     "question": q_text.strip(),
-                    "value": val,
-                    "explanation": why,
-                    "is_answered": is_answered
+                    "value": val.strip(),
+                    "explanation": why.strip(),
+                    "is_answered": bool(val.strip() or why.strip())
                 })
             
             parsed_data.append({
@@ -86,7 +64,58 @@ def parse_questionnaire(filepath):
                 "questions": section_questions
             })
             
-    return parsed_data, total_parsed, answered_count
+    return parsed_data
+
+def merge_pdf_answers(sections, pdf_path):
+    """
+    Reads the interactive PDF and overrides markdown template values with filled form values.
+    """
+    if not pdf_path.exists():
+        print("[*] No filled PDF found. Proceeding with markdown file answers.")
+        return sections, sum(sum(1 for q in s["questions"] if q["is_answered"]) for s in sections)
+
+    print(f"[*] Extracting form field data from PDF: {pdf_path}")
+    try:
+        from pypdf import PdfReader
+        reader = PdfReader(str(pdf_path))
+        fields = reader.get_fields()
+        if not fields:
+            print("[-] Warning: No form fields detected in PDF.")
+            return sections, 0
+            
+        answered_count = 0
+        q_idx = 1
+        
+        for sec in sections:
+            for q in sec["questions"]:
+                val_field = fields.get(f"q_{q_idx}_val")
+                why_field = fields.get(f"q_{q_idx}_why")
+                
+                val_val = ""
+                why_val = ""
+                
+                if val_field and "/V" in val_field:
+                    val_val = str(val_field["/V"]).strip()
+                if why_field and "/V" in why_field:
+                    why_val = str(why_field["/V"]).strip()
+                    
+                if val_val or why_val:
+                    q["value"] = val_val
+                    q["explanation"] = why_val
+                    q["is_answered"] = True
+                    answered_count += 1
+                else:
+                    # Keep markdown values if present, otherwise mark unanswered
+                    if not q["value"] and not q["explanation"]:
+                        q["is_answered"] = False
+                
+                q_idx += 1
+                
+        return sections, answered_count
+    except Exception as e:
+        print(f"[-] Error merging PDF values: {e}")
+        # Return fallback markdown counts
+        return sections, sum(sum(1 for q in s["questions"] if q["is_answered"]) for s in sections)
 
 def generate_profile():
     print("[*] Initializing Vespera Profiler Engine...")
@@ -97,24 +126,28 @@ def generate_profile():
         sys.exit(1)
         
     q_path = Path("D:/AI/Antigravity outputs/questionnaire.md")
+    pdf_path = Path("D:/AI/Antigravity outputs/questionnaire.pdf")
     out_path = Path("D:/AI/Antigravity outputs/profile.md")
     
-    parsed_res = parse_questionnaire(q_path)
-    if not parsed_res:
-        print("[-] FAILED: Could not parse questionnaire.")
+    sections = parse_markdown_questions(q_path)
+    if not sections:
+        print("[-] FAILED: Could not parse questionnaire template.")
         sys.exit(1)
         
-    sections, total_q, answered_q = parsed_res
+    # Merge PDF overrides if the PDF form is filled
+    sections, answered_q = merge_pdf_answers(sections, pdf_path)
+    total_q = sum(len(s["questions"]) for s in sections)
+    
     print(f"[*] Questionnaire Stats: {answered_q}/{total_q} questions answered.")
     
     if answered_q == 0:
-        print("[!] WARNING: You haven't answered any questions yet. The generated profile will be generic/empty.")
-        confirm = input("[?] Proceed anyway? (y/n): ").strip().lower()
+        print("[!] WARNING: You haven't answered any questions in either the markdown or PDF form.")
+        confirm = input("[?] Proceed with generic profile? (y/n): ").strip().lower()
         if confirm != 'y':
             print("[*] Aborting execution.")
             sys.exit(0)
             
-    # Format the answered data for the prompt
+    # Format the data for the prompt
     formatted_input = []
     for sec in sections:
         formatted_input.append(f"## {sec['section']}")
