@@ -1,6 +1,36 @@
 # Antigravity Overdrive Sync (Universal Local Memory)
 
-Welcome! This is a local, multi-threaded pipeline built to grab my AI chat histories, process them using the Gemini API, and inject structured milestone summaries straight into a local markdown system document (`D:\GEMINI.md`). It also keeps a persistent record of everything inside a local SQLite state database.
+Welcome! This is a local, multi-threaded pipeline built to grab AI chat histories, process them, and compile structured milestone summaries and memory rules straight into your local markdown systems (like `.clinerules` or `GEMINI.md`). It keeps a persistent, queryable state record inside a local SQLite database and features a clean terminal user interface (TUI).
+
+---
+
+## 🚀 Key Features
+
+* **Relational Memory Storage**: Migrated from flat YAML files to an optimized, transaction-safe SQLite database running in WAL (Write-Ahead Logging) mode.
+* **TUI Dashboard Control**: A terminal user interface (`rich`-powered) to monitor database metrics, sync logs on demand, update preferences, and read your behavioral telemetry in real-time.
+* **Background Daemon Poller**: A folder-watcher script (`core/daemon.py`) that monitors workspace transcripts and runs synchronization cycles automatically in the background.
+* **Memory Consolidation (Conflict Resolution)**: Uses a local LLM or Gemini to batch-evaluate facts periodically, pruning contradictory information, merging redundancies, and maintaining "fact aging."
+* **Context-Aware Workspace Tagging**: Automatically extracts project tags based on execution paths (`Cwd`) from your logs, prioritizing rules and memories depending on the active workspace you are coding in.
+* **Hierarchical Memory Cores**: Constructs context-rich system prompts divided into distinct tiers (Tier 1 Episodic/Temporal, Tier 2 Cognitive/Behavioral, Tier 3 Semantic/Facts) to keep active contexts clean and within tight token limits.
+
+---
+
+## 📦 Getting Started
+
+1. **Clone the repository** and navigate to the root directory.
+2. **Install dependencies**:
+   ```bash
+   pip install -r requirements.txt
+   ```
+3. **Configure your environment**: Create a `.env` file based on `.env.example` to provide your API keys and local Ollama model options.
+4. **Run the Dashboard TUI**:
+   ```bash
+   python main.py tui
+   ```
+5. **Start the background Daemon**:
+   ```bash
+   python main.py daemon
+   ```
 
 ---
 
@@ -21,20 +51,22 @@ If you are an experienced developer, a Python wizard, or just someone who likes 
 
 I would love your help, suggestions, or pull requests regarding:
 1. **Code Architecture & Cleanup:** Better ways to structure my classes, handle imports, or separate concerns.
-2. **Dynamic Rate Limiting:** Right now, I'm using a brute-force `time.sleep(2.0)` inside my thread loop to avoid hitting Gemini's Free Tier 15 RPM limit. I'd love to transition this to a proper asynchronous token-bucket rate limiter.
-3. **Database Performance:** Any tips on making sure my SQLite engine (currently running in WAL mode with a custom exponential backoff loop) is completely bulletproof under high-concurrency workloads.
-4. **Async Migration:** Moving the entire network/file pipeline from synchronous `urllib` threads over to a clean async architecture.
+2. **Dynamic Rate Limiting:** Asynchronous token-bucket rate limiters.
+3. **Database Performance:** SQLite optimization tips under high-concurrency workloads.
+4. **Async Migration:** Moving the entire network/file pipeline from synchronous threads over to a clean async architecture.
 
 ---
 
 ## 🚀 How to Look Around
 
-Because this repository enforces a strict security perimeter via `.gitignore`, my personal API keys, private database files (`sync_state.db`), and personal markdown logs are completely excluded. 
+Because this repository enforces a strict security perimeter via `.gitignore`, private database files (`sync_state.db`), and personal transcripts are completely excluded. 
 
 You are looking at a clean, sterile engine blueprint:
-- `main.py`: The central execution runner.
-- `core/engine.py`: Handles database operations, initialization, and the transactional write backoff loops.
-- `injectors/gemini_md.py`: Connects to the Gemini API, manages payload structures, and sets request time limits.
+* `main.py`: The central execution entry point.
+* `core/database.py`: Manages the SQLite schema, migrations, and transactional inserts.
+* `core/consolidator.py`: Resolves memory conflicts, redundant facts, and aging.
+* `core/assembler.py`: Compiles the dynamic system prompt divided into memory hierarchies.
+* `tui/dashboard.py`: Renders the terminal dashboard and controls active sync flows.
 
 ### Getting Involved
 
