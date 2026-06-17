@@ -142,6 +142,7 @@ class ULMDatabase:
         try:
             with self.get_connection() as conn:
                 c = conn.cursor()
+                message_rows = []
                 for session in session_logs:
                     session_id = session["chat_id"]
                     last_mutated = session["last_mutated"]
@@ -161,18 +162,21 @@ class ULMDatabase:
                     """, (session_id, "antigravity", created_at, last_mutated, topics, summary))
                     synced_sessions += 1
                     
-                    # 2. Insert messages
+                    # 2. Collect messages for batch insert
                     for msg in messages:
                         role = msg.get("sender", "")
                         content = msg.get("text", "")
-                        created_at = msg.get("timestamp") or last_mutated
+                        msg_created_at = msg.get("timestamp") or last_mutated
                         
-                        message_id = self.generate_message_id(session_id, role, content, created_at)
-                        c.execute("""
-                            INSERT OR IGNORE INTO messages (message_id, session_id, role, content, created_at)
-                            VALUES (?, ?, ?, ?, ?)
-                        """, (message_id, session_id, role, content, created_at))
-                        synced_messages += 1
+                        message_id = self.generate_message_id(session_id, role, content, msg_created_at)
+                        message_rows.append((message_id, session_id, role, content, msg_created_at))
+                
+                if message_rows:
+                    c.executemany("""
+                        INSERT OR IGNORE INTO messages (message_id, session_id, role, content, created_at)
+                        VALUES (?, ?, ?, ?, ?)
+                    """, message_rows)
+                    synced_messages = len(message_rows)
                 
                 # Check default preference and facts
                 c.execute("SELECT COUNT(*) FROM preferences")
@@ -196,6 +200,7 @@ class ULMDatabase:
                 
                 c.execute("SELECT COUNT(*) FROM facts")
                 if c.fetchone()[0] == 0:
+                    import hashlib
                     c.execute("""
                         INSERT OR REPLACE INTO facts (fact_id, fact, category, confidence, first_seen, last_seen)
                         VALUES (?, ?, ?, ?, ?, ?)
@@ -308,6 +313,17 @@ class ULMDatabase:
                     local_conn.commit()
             except sqlite3.Error as e:
                 print(f"[-] Error setting preference: {e}")
+
+    def get_preference(self, key, default=None):
+        try:
+            with self.get_connection() as conn:
+                c = conn.cursor()
+                c.execute("SELECT pref_value FROM preferences WHERE pref_key = ?", (key,))
+                row = c.fetchone()
+                return row[0] if row else default
+        except sqlite3.Error as e:
+            print(f"[-] Error getting preference {key}: {e}")
+            return default
 
     def get_recent_context(self, limit=5):
         try:

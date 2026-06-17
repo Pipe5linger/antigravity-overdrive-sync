@@ -185,14 +185,14 @@ These are concrete, implementable changes sorted by impact/complexity ratio. No 
 
 No new features. No performance work. Correctness only.
 
-| Task | File | Action | CFP Addressed |
+| Task | File | Action | Status |
 |---|---|---|---|
-| **S-1** | `core/compiler.py` | Fix `extract_database_milestones()` to query `sessions` table with `session_id` column instead of `conversations`/`thread_id`. | CFP-3 |
-| **S-2** | `core/drift_check.py` | Remove `thought` column from the `SELECT` query — it does not exist in the `messages` table. Query only `content`. | CFP (drift checker crash) |
-| **S-3** | `injectors/ollama_modelfile.py` | Replace the direct `open(continue_config_path, 'w')` write with `atomic_write()` from `core/utils.py`. | CFP-6 |
-| **S-4** | `parsers/antigravity.py` | Add incremental checkpoint: load `last_sync.txt` timestamp at the start of `fetch_new_logs()`, skip any `transcript.jsonl` where `mtime < last_sync_timestamp`. Update `last_sync.txt` after a successful parse run. | CFP-5 |
-| **S-5** | `core/fact_extractor.py` + `core/profile_evaluator.py` | Create a shared `quota_lock.json` file in the project root. On 429 response: write `{"exhausted": true, "timestamp": ISO}`. On startup of either class: check this file and exit early if exhausted within the last 24 hours. | CFP-2 (quota blast) |
-| **S-6** | `core/utils.py` | Move `TokenBucket` class here (single canonical definition). Remove the duplicated class from `fact_extractor.py` and `profile_evaluator.py`, import from `core.utils`. | CFP-2 (dual-bucket rate double-burn) |
+| **S-1** | `core/compiler.py` | Fix `extract_database_milestones()` to query `sessions` table with `session_id` column instead of `conversations`/`thread_id`. | **[COMPLETED]** |
+| **S-2** | `core/drift_check.py` | Remove `thought` column from the `SELECT` query — it does not exist in the `messages` table. Query only `content`. | **[COMPLETED]** |
+| **S-3** | `injectors/ollama_modelfile.py` | Replace the direct `open(continue_config_path, 'w')` write with `atomic_write()` from `core/utils.py`. | **[COMPLETED]** |
+| **S-4** | `parsers/antigravity.py` | Add incremental checkpoint: load `last_sync.txt` timestamp at the start of `fetch_new_logs()`, skip any `transcript.jsonl` where `mtime < last_sync_timestamp`. Update `last_sync.txt` after a successful parse run. | **[COMPLETED]** |
+| **S-5** | `core/fact_extractor.py` + `core/profile_evaluator.py` | Create a shared `quota_lock.json` file in the project root. On 429 response: write `{"exhausted": true, "timestamp": ISO}`. On startup of either class: check this file and exit early if exhausted within the last 24 hours. | **[COMPLETED]** |
+| **S-6** | `core/utils.py` | Move `TokenBucket` class here (single canonical definition). Remove the duplicated class from `fact_extractor.py` and `profile_evaluator.py`, import from `core.utils`. | **[COMPLETED]** |
 
 ---
 
@@ -200,13 +200,13 @@ No new features. No performance work. Correctness only.
 
 **Goal:** Reduce wall-clock sync time and memory footprint without architectural surgery. All changes must be backward-compatible and independently testable.
 
-| Task | File | Action | CFP Addressed |
+| Task | File | Action | Status |
 |---|---|---|---|
-| **O-1** | `core/database.py` | Refactor `import_raw_logs()` to use `cursor.executemany()` for message batch inserts. Pre-compute all row tuples in a list comprehension before touching the database. Add chunking at 5,000 rows/batch to bound lock time. | CFP-4 |
-| **O-2** | `core/engine.py` | Add a content hash (SHA-256 of the serialized YAML) at the top of `commit_atomic_write()`. Load the existing file hash (cached from the last write, stored in a sidecar `.hash` file). Skip the write if hashes match. | CFP-1 (unnecessary writes) |
-| **O-3** | `core/fact_extractor.py` + `core/profile_evaluator.py` | Wrap the per-session API calls in a `concurrent.futures.ThreadPoolExecutor(max_workers=3)` pool. The shared `TokenBucket` from Phase 1 (now in `core/utils.py`) becomes a threading-safe lock by wrapping `consume()` with a `threading.Lock`. | CFP-2 (throughput) |
-| **O-4** | `injectors/gemini_md.py` | The `compile_summaries_to_dict()` method issues one `SELECT` for all sessions and then N additional `SELECT` queries for messages inside the loop — a classic N+1 query problem. Replace with a single `JOIN` query that fetches `session_id`, `updated_at`, `summary`, and aggregates message `role`/`content` in one pass. | Performance |
-| **O-5** | `core/engine.py` | Cap `sync_state.yaml` growth: after `merge_and_reconfigure()`, prune sessions where `last_mutated` is older than a configurable TTL (default: 180 days) from the YAML export. SQLite remains the full lossless archive. YAML is a rolling working window. | CFP-1 (unbounded growth) |
+| **O-1** | `core/database.py` | Refactor `import_raw_logs()` to use `cursor.executemany()` for message batch inserts. Pre-compute all row tuples in a list comprehension before touching the database. Add chunking at 5,000 rows/batch to bound lock time. | **[COMPLETED]** |
+| **O-2** | `core/engine.py` | Add a content hash (SHA-256 of the serialized YAML) at the top of `commit_atomic_write()`. Load the existing file hash (cached from the last write, stored in a sidecar `.hash` file). Skip the write if hashes match. | Pending |
+| **O-3** | `core/fact_extractor.py` + `core/profile_evaluator.py` | Wrap the per-session API calls in a `concurrent.futures.ThreadPoolExecutor(max_workers=3)` pool. The shared `TokenBucket` from Phase 1 (now in `core/utils.py`) becomes a threading-safe lock by wrapping `consume()` with a `threading.Lock`. | Pending |
+| **O-4** | `injectors/gemini_md.py` | The `compile_summaries_to_dict()` method issues one `SELECT` for all sessions and then N additional `SELECT` queries for messages inside the loop — a classic N+1 query problem. Replace with a single `JOIN` query that fetches `session_id`, `updated_at`, `summary`, and aggregates message `role`/`content` in one pass. | **[COMPLETED]** |
+| **O-5** | `core/engine.py` | Cap `sync_state.yaml` growth: after `merge_and_reconfigure()`, prune sessions where `last_mutated` is older than a configurable TTL (default: 180 days) from the YAML export. SQLite remains the full lossless archive. YAML is a rolling working window. | Pending |
 
 ---
 

@@ -109,6 +109,10 @@ class ULMTUIDashboard:
         menu_text.append("Show Recent Synced Messages\n", style="white")
         menu_text.append("[P] ", style="bold green")
         menu_text.append("List Developer Profile Metrics\n", style="white")
+        menu_text.append("[C] ", style="bold green")
+        menu_text.append("Configure System Settings\n", style="white")
+        menu_text.append("[H] ", style="bold green")
+        menu_text.append("Rule Sync (HAMI Compile to .clinerules)\n", style="white")
         menu_text.append("[Q] ", style="bold red")
         menu_text.append("Exit Control Center", style="white")
 
@@ -162,6 +166,19 @@ class ULMTUIDashboard:
                     self.add_log("ULM Injector stage encountered failures.")
         except Exception as e:
             self.add_log(f"Error during sync pipeline: {e}")
+
+    def trigger_rule_sync(self):
+        self.console.print("\n[bold green]🚀 Compiling HAMI system prompt to .clinerules...[/bold green]")
+        self.add_log("Starting rule compilation...")
+        try:
+            from injectors.cline_rules import ClineRulesInjector
+            injector = ClineRulesInjector()
+            if injector.inject(self.db):
+                self.add_log("Successfully compiled rules to .clinerules.")
+            else:
+                self.add_log("Failed to compile rules.")
+        except Exception as e:
+            self.add_log(f"Error compiling rules: {e}")
 
     def trigger_backup(self):
         self.console.print("\n[bold green]📦 Backing up database state to YAML...[/bold green]")
@@ -282,6 +299,93 @@ class ULMTUIDashboard:
         self.console.print("\n[bold green]Press any key to return to Dashboard...[/bold green]")
         msvcrt.getch()
 
+    def configure_settings(self):
+        import requests
+        
+        while True:
+            self.console.clear()
+            self.console.print(Panel(Align.center(Text("⚙️ SYSTEM CONFIGURATION SETTINGS ⚙️", style="bold yellow")), border_style="yellow"))
+            
+            # Read current values
+            provider = self.db.get_preference("llm_provider", "local_ollama")
+            model = self.db.get_preference("llm_model", "qwen2.5-coder:14b")
+            endpoint = self.db.get_preference("ollama_endpoint", "http://localhost:11434")
+            gemini_key = self.db.get_preference("gemini_api_key", "")
+            
+            mask_key = f"{gemini_key[:4]}...{gemini_key[-4:]}" if len(gemini_key) > 8 else ("Set" if gemini_key else "Not Set")
+            
+            table = Table(expand=True, box=None)
+            table.add_column("Key", style="bold cyan")
+            table.add_column("Current Value", style="white")
+            table.add_column("Command Option", style="bold green")
+            
+            table.add_row("LLM Provider", provider.upper(), "[1] Toggle Provider (Ollama / Gemini)")
+            table.add_row("Active LLM Model", model, "[2] Change Active Model")
+            table.add_row("Ollama Endpoint", endpoint, "[3] Change Ollama Endpoint URL")
+            table.add_row("Gemini API Key", mask_key, "[4] Change Gemini API Key")
+            
+            self.console.print(table)
+            self.console.print("\n[bold yellow]Available Commands:[/bold yellow]")
+            self.console.print("  [1-4] Edit respective settings")
+            self.console.print("  [T]   Detect local Ollama models")
+            self.console.print("  [Q]   Return to Main Dashboard")
+            
+            char = msvcrt.getch()
+            try:
+                cmd = char.decode('utf-8').lower()
+            except UnicodeDecodeError:
+                continue
+                
+            if cmd == 'q':
+                break
+            elif cmd == '1':
+                new_provider = "cloud_gemini" if provider == "local_ollama" else "local_ollama"
+                self.db.set_preference("llm_provider", new_provider)
+                self.add_log(f"Changed provider to {new_provider}")
+            elif cmd == '2':
+                self.console.print("\nEnter new active model identifier (e.g. qwen2.5-coder:14b, gemini-1.5-flash): ", style="bold green", end="")
+                new_model = input().strip()
+                if new_model:
+                    self.db.set_preference("llm_model", new_model)
+                    self.add_log(f"Set model path to: {new_model}")
+            elif cmd == '3':
+                self.console.print("\nEnter new Ollama Endpoint URL (default http://localhost:11434): ", style="bold green", end="")
+                new_url = input().strip()
+                if new_url:
+                    self.db.set_preference("ollama_endpoint", new_url)
+                    self.add_log(f"Set Ollama endpoint to: {new_url}")
+            elif cmd == '4':
+                self.console.print("\nEnter new Gemini API Key: ", style="bold green", end="")
+                new_key = input().strip()
+                if new_key:
+                    self.db.set_preference("gemini_api_key", new_key)
+                    self.add_log("Successfully updated cloud API credential.")
+            elif cmd == 't':
+                self.console.print("\n[*] Querying local Ollama instance tags...", style="cyan")
+                try:
+                    url = f"{endpoint.rstrip('/')}/api/tags"
+                    res = requests.get(url, timeout=10)
+                    if res.status_code == 200:
+                        models = [m['name'] for m in res.json().get('models', [])]
+                        self.console.print("\nDetected local models:", style="bold green")
+                        for idx, m_name in enumerate(models):
+                            self.console.print(f"  [{idx + 1}] {m_name}")
+                        self.console.print("\nSelect number to set model, or press any other key to abort: ", style="yellow", end="")
+                        selection_char = msvcrt.getch()
+                        try:
+                            sel_idx = int(selection_char.decode('utf-8')) - 1
+                            if 0 <= sel_idx < len(models):
+                                self.db.set_preference("llm_model", models[sel_idx])
+                                self.add_log(f"Selected Ollama model: {models[sel_idx]}")
+                        except:
+                            pass
+                    else:
+                        self.console.print(f"[-] Ollama returned error: {res.status_code}", style="bold red")
+                        time.sleep(2)
+                except Exception as e:
+                    self.console.print(f"[-] Failed to reach Ollama: {e}", style="bold red")
+                    time.sleep(2)
+
     def start(self):
         # Auto-initialize DB schema just in case
         self.db.initialize_db()
@@ -306,6 +410,11 @@ class ULMTUIDashboard:
                 self.view_messages()
             elif key == 'p':
                 self.view_profile()
+            elif key == 'c':
+                self.configure_settings()
+            elif key == 'h':
+                self.trigger_rule_sync()
+                time.sleep(1.5)
             elif key == 'q':
                 self.console.print("\n[bold magenta]Exiting Vespera Control Center. Keep the momentum high. 🚀[/bold magenta]\n")
                 break

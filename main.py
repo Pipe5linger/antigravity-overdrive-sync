@@ -38,6 +38,11 @@ def register_plugins():
         INJECTORS["ollama"] = OllamaInjector
     except Exception as e:
         print(f"[-] Failed to register OllamaInjector: {e}")
+    try:
+        from injectors.cline_rules import ClineRulesInjector
+        INJECTORS["cline_rules"] = ClineRulesInjector
+    except Exception as e:
+        print(f"[-] Failed to register ClineRulesInjector: {e}")
 
 def backup_sqlite_to_yaml(db, engine):
     import yaml
@@ -67,7 +72,7 @@ def backup_sqlite_to_yaml(db, engine):
 def main():
     register_plugins()
     parser = argparse.ArgumentParser(description="Universal Local Memory (ULM) Agent Pipeline")
-    parser.add_argument("command", nargs="?", choices=["sync", "get-context", "tui"], default="sync")
+    parser.add_argument("command", nargs="?", choices=["sync", "get-context", "tui", "daemon"], default="sync")
     parser.add_argument("--parser", choices=list(PARSERS.keys()), default="antigravity")
     parser.add_argument("--injector", choices=list(INJECTORS.keys()), default="gemini_md")
     parser.add_argument("--dry-run", action="store_true")
@@ -86,6 +91,11 @@ def main():
         from tui.dashboard import ULMTUIDashboard
         app = ULMTUIDashboard()
         app.start()
+
+    elif args.command == "daemon":
+        from core.daemon import ULMDaemon
+        daemon = ULMDaemon()
+        daemon.start()
 
     elif args.command == "sync":
         print(f"\n[*] ULM Pipeline Initialized | Parser: {args.parser.upper()} | Injector: {args.injector.upper()}")

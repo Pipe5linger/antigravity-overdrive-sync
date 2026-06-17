@@ -10,27 +10,68 @@ from normalizers.adapters import GeminiNormalizer, AntigravityNormalizer
 LAST_SYNC_FILE = Path(__file__).resolve().parents[1] / "core" / "last_sync.txt"
 
 class AntigravityParser(BaseParser):
-    def __init__(self, source_dirs, llm_model=None, vector_model=None):
-        if not source_dirs:
-            raise ValueError("source_dirs list must be provided")
-        self.source_dirs = source_dirs if isinstance(source_dirs, list) else [source_dirs]
+    def __init__(self, source_dirs=None, llm_model=None, vector_model=None):
         self.llm_model = llm_model
         self.vector_model = vector_model        
+        
+        if not source_dirs:
+            # 1. Try to load from database preferences
+            from core.engine import ULMEngine
+            from core.database import ULMDatabase
+            try:
+                engine = ULMEngine()
+                db_path = str(Path(engine.target_yaml).with_suffix(".db"))
+                db = ULMDatabase(db_path)
+                db_pref = db.get_preference("source_dirs")
+                if db_pref:
+                    source_dirs = [x.strip() for x in db_pref.split(",") if x.strip()]
+            except Exception:
+                pass
+                
+        if not source_dirs:
+            # 2. Auto-detect paths
+            detected = []
+            
+            # Check local User Profile gemini brain dir
+            user_brain = Path(os.path.expanduser("~")) / ".gemini" / "antigravity" / "brain"
+            if user_brain.exists():
+                detected.append(str(user_brain))
+                
+            # Check standard unified ingest drive path
+            ingest_path = Path(r"D:\Memory\Unified_Ingest")
+            if ingest_path.exists():
+                detected.append(str(ingest_path))
+                
+            if detected:
+                source_dirs = detected
+            else:
+                source_dirs = [r"D:\Memory\Unified_Ingest"]
+                
+        self.source_dirs = source_dirs if isinstance(source_dirs, list) else [source_dirs]
 
     def _load_last_sync_timestamp(self):
+        """Load the last sync timestamp from file with proper error handling.
+        Returns:
+            float: Unix timestamp if valid, None otherwise
+        """
         try:
             if LAST_SYNC_FILE.exists():
-                raw = LAST_SYNC_FILE.read_text(encoding="utf-8").strip()
-                if raw:
-                    return datetime.strptime(raw, "%Y-%m-%d %H:%M:%S").timestamp()
-        except Exception:
-            pass
+                with open(LAST_SYNC_FILE, 'r', encoding='utf-8') as f:
+                    raw = f.read().strip()
+                    if raw:
+                        return datetime.strptime(raw, "%Y-%m-%d %H:%M:%S").timestamp()
+        except Exception as e:
+            print(f"[-] AntigravityParser: Error reading last_sync.txt: {e}")
         return None
 
     def _update_last_sync_timestamp(self):
+        """Atomically update the last sync timestamp file."""
         try:
             now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            LAST_SYNC_FILE.write_text(now_str, encoding="utf-8")
+            temp_file = LAST_SYNC_FILE.with_suffix('.tmp')
+            with open(temp_file, 'w', encoding='utf-8') as f:
+                f.write(now_str)
+            temp_file.replace(LAST_SYNC_FILE)  # Atomic rename
         except Exception as e:
             print(f"[-] AntigravityParser: Failed to update last_sync.txt: {e}")
 
