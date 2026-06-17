@@ -56,7 +56,7 @@ class ULMDaemon:
     def run_sync_cycle(self):
         """Fetches logs, updates SQLite, and triggers rule injections."""
         print("[*] Daemon: Initiating automatic synchronization cycle...")
-        new_logs = self.parser.fetch_new_logs()
+        new_logs = self.parser.fetch_new_logs(force_ingest=True)
         if new_logs:
             self.db.import_raw_logs(new_logs)
             print(f"[+] Daemon: Ingested {len(new_logs)} session deltas to database.")
