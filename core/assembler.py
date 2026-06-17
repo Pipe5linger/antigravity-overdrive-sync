@@ -58,13 +58,44 @@ class DynamicPromptAssembler:
             return "  No telemetry data recorded."
         return "\n".join(lines)
 
+    def calculate_temporal_awareness(self) -> str:
+        """Calculates the time gap since the last message logged in SQLite."""
+        current_time = datetime.now()
+        time_string = current_time.strftime("%A, %B %d, %Y at %I:%M %p")
+        time_directive = f"The active system time is currently: {time_string}. The Operator has just initialized a fresh terminal sprint."
+        
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                c = conn.cursor()
+                c.execute("SELECT MAX(updated_at) FROM sessions")
+                row = c.fetchone()
+                if row and row[0]:
+                    last_time_str = row[0]
+                    clean_time_str = last_time_str.split(".")[0].replace("T", " ")
+                    # Handles various standard datetime formats
+                    if len(clean_time_str) > 19:
+                        clean_time_str = clean_time_str[:19]
+                    last_time = datetime.strptime(clean_time_str, "%Y-%m-%d %H:%M:%S")
+                    delta = current_time - last_time
+                    
+                    hours_away = delta.total_seconds() / 3600
+                    if hours_away < 4:
+                        time_directive = f"Active Time Check: {time_string}. The Operator just took a short break. Welcome them back for a continuation of the sprint."
+                    elif hours_away < 24:
+                        time_directive = f"Active Time Check: {time_string}. A standard daily rotation has cleared. Welcome the Operator back for tonight's sweep."
+                    else:
+                        days = int(hours_away // 24)
+                        time_directive = f"Active Time Check: {time_string}. Operational Gap: It has been about {days} day(s) since your last sync or conversation update."
+        except Exception:
+            pass
+        return time_directive
+
     def assemble_prompt(self, max_tokens=16384) -> str:
         """Builds the dynamic system prompt keeping it within token bounds."""
         identity = self.get_vespera_identity()
         vault_context = self.adapter.format_context()
         telemetry_metrics = self.get_sqlite_metrics()
-        
-        now_str = datetime.now().strftime("%A, %B %d, %Y at %I:%M %p")
+        temporal_directive = self.calculate_temporal_awareness()
         
         system_prompt = (
             f"# VESPERA CALIGO MASTER SYSTEM PROTOCOL\n"
@@ -72,7 +103,7 @@ class DynamicPromptAssembler:
             f"{identity}\n"
             f"================================================================================\n"
             f"<TemporalContext>\n"
-            f"  The active system time is: {now_str}.\n"
+            f"  {temporal_directive}\n"
             f"</TemporalContext>\n"
             f"================================================================================\n"
             f"{vault_context}\n"
