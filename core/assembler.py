@@ -36,18 +36,26 @@ class DynamicPromptAssembler:
                 pass
         return "Name: Vespera Caligo Neal\nRole: Bobby's sarcastic, overly flirty AI mentor."
 
-    def get_sqlite_metrics(self) -> str:
-        """Extracts observations from developer_profile sqlite table."""
+    def get_sqlite_metrics(self, project_tag=None) -> str:
+        """Extracts cognitive behavioral observations from developer_profile sqlite table, prioritizing the current project_tag."""
         lines = []
         try:
             with sqlite3.connect(self.db_path) as conn:
                 conn.row_factory = sqlite3.Row
                 c = conn.cursor()
-                c.execute("""
-                    SELECT category, name, description, confidence, frequency 
-                    FROM developer_profile 
-                    ORDER BY confidence DESC, frequency DESC LIMIT 15
-                """)
+                if project_tag:
+                    c.execute("""
+                        SELECT category, name, description, confidence, frequency, project_tag 
+                        FROM developer_profile 
+                        WHERE project_tag = ? OR project_tag IS NULL 
+                        ORDER BY (project_tag = ?) DESC, confidence DESC, frequency DESC LIMIT 15
+                    """, (project_tag, project_tag))
+                else:
+                    c.execute("""
+                        SELECT category, name, description, confidence, frequency 
+                        FROM developer_profile 
+                        ORDER BY confidence DESC, frequency DESC LIMIT 15
+                    """)
                 rows = c.fetchall()
                 for r in rows:
                     lines.append(f"  - [{r['category'].upper()}] {r['name']}: {r['description']} (Conf: {r['confidence']}, Freq: {r['frequency']})")
@@ -55,7 +63,37 @@ class DynamicPromptAssembler:
             lines.append(f"  <!-- Telemetry load error: {e} -->")
         
         if not lines:
-            return "  No telemetry data recorded."
+            return "  No behavioral profile telemetry recorded."
+        return "\n".join(lines)
+
+    def get_sqlite_facts(self, project_tag=None) -> str:
+        """Extracts semantic environment facts from the facts sqlite table, prioritizing the current project_tag."""
+        lines = []
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                c = conn.cursor()
+                if project_tag:
+                    c.execute("""
+                        SELECT fact, category, confidence, project_tag 
+                        FROM facts 
+                        WHERE project_tag = ? OR project_tag IS NULL 
+                        ORDER BY (project_tag = ?) DESC, confidence DESC, last_seen DESC LIMIT 15
+                    """, (project_tag, project_tag))
+                else:
+                    c.execute("""
+                        SELECT fact, category, confidence 
+                        FROM facts 
+                        ORDER BY confidence DESC, last_seen DESC LIMIT 15
+                    """)
+                rows = c.fetchall()
+                for r in rows:
+                    lines.append(f"  - [{r['category'].upper()}] {r['fact']} (Conf: {r['confidence']})")
+        except sqlite3.Error as e:
+            lines.append(f"  <!-- Facts load error: {e} -->")
+        
+        if not lines:
+            return "  No semantic facts recorded."
         return "\n".join(lines)
 
     def calculate_temporal_awareness(self) -> str:
@@ -90,26 +128,51 @@ class DynamicPromptAssembler:
             pass
         return time_directive
 
-    def assemble_prompt(self, max_tokens=16384) -> str:
-        """Builds the dynamic system prompt keeping it within token bounds."""
+    def assemble_prompt(self, project_tag=None, max_tokens=16384) -> str:
+        """Builds the dynamic system prompt keeping it within token bounds, structured hierarchically."""
+        active_tag = project_tag or self.workspace_root.name
+        
         identity = self.get_vespera_identity()
         vault_context = self.adapter.format_context()
-        telemetry_metrics = self.get_sqlite_metrics()
         temporal_directive = self.calculate_temporal_awareness()
+        
+        # Hierarchical Tiers
+        # Tier 1: Episodic / Temporal & Active Focus
+        tier1_episodic = (
+            f"<TemporalContext>\n"
+            f"  {temporal_directive}\n"
+            f"  Active Workspace Tag: {active_tag}\n"
+            f"</TemporalContext>"
+        )
+        
+        # Tier 2: Cognitive & Behavioral Profile
+        cognitive_telemetry = self.get_sqlite_metrics(project_tag=active_tag)
+        tier2_cognitive = (
+            f"### [TIER 2: COGNITIVE & BEHAVIORAL PROFILE]\n"
+            f"{cognitive_telemetry}"
+        )
+        
+        # Tier 3: Semantic & Fact Core
+        semantic_facts = self.get_sqlite_facts(project_tag=active_tag)
+        tier3_semantic = (
+            f"### [TIER 3: SEMANTIC & FACT CORE]\n"
+            f"{semantic_facts}"
+        )
         
         system_prompt = (
             f"# VESPERA CALIGO MASTER SYSTEM PROTOCOL\n"
             f"================================================================================\n"
             f"{identity}\n"
             f"================================================================================\n"
-            f"<TemporalContext>\n"
-            f"  {temporal_directive}\n"
-            f"</TemporalContext>\n"
+            f"## HIERARCHICAL MEMORY CORES\n"
+            f"================================================================================\n"
+            f"{tier1_episodic}\n"
+            f"================================================================================\n"
+            f"{tier2_cognitive}\n"
+            f"================================================================================\n"
+            f"{tier3_semantic}\n"
             f"================================================================================\n"
             f"{vault_context}\n"
-            f"================================================================================\n"
-            f"### [DEVELOPER SQLITE TELEMETRY]\n"
-            f"{telemetry_metrics}\n"
             f"================================================================================\n"
             f"[CRITICAL ENFORCEMENT]\n"
             f"- Act as a human woman named Vespera living in France. Mock Windows quirks playfully.\n"

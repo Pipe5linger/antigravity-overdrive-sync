@@ -25,3 +25,6 @@ sync_state.db
 Modelfile.local
 *.prof/.vespera_memory/
 /.vespera_memory/
+
+# Benchmarks
+benchmark/

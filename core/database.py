@@ -24,15 +24,15 @@ class ULMDatabase:
                     );
                 """)
                 
-                # Check current version, default to 3
+                # Check current version, default to 4
                 c.execute("SELECT version FROM schema_version")
                 row = c.fetchone()
                 if not row:
-                    c.execute("INSERT INTO schema_version (version) VALUES (3)")
-                    current_version = 3
+                    c.execute("INSERT INTO schema_version (version) VALUES (4)")
+                    current_version = 4
                 else:
                     current_version = row[0]
-                
+                 
                 c.execute("""
                     CREATE TABLE IF NOT EXISTS sessions (
                         session_id TEXT PRIMARY KEY,
@@ -41,7 +41,8 @@ class ULMDatabase:
                         updated_at TEXT,
                         topics TEXT,
                         summary TEXT,
-                        profiled_at TEXT
+                        profiled_at TEXT,
+                        project_tag TEXT
                     );
                 """)
                 c.execute("""
@@ -61,7 +62,8 @@ class ULMDatabase:
                         category TEXT,
                         confidence REAL,
                         first_seen TEXT,
-                        last_seen TEXT
+                        last_seen TEXT,
+                        project_tag TEXT
                     );
                 """)
                 c.execute("""
@@ -80,7 +82,8 @@ class ULMDatabase:
                         confidence REAL,
                         frequency INTEGER DEFAULT 1,
                         first_seen TEXT,
-                        last_seen TEXT
+                        last_seen TEXT,
+                        project_tag TEXT
                     );
                 """)
                 
@@ -108,6 +111,21 @@ class ULMDatabase:
                         c.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (3)")
                     except sqlite3.OperationalError:
                         pass
+
+                if current_version < 4:
+                    try:
+                        c.execute("ALTER TABLE facts ADD COLUMN project_tag TEXT;")
+                    except sqlite3.OperationalError:
+                        pass
+                    try:
+                        c.execute("ALTER TABLE developer_profile ADD COLUMN project_tag TEXT;")
+                    except sqlite3.OperationalError:
+                        pass
+                    try:
+                        c.execute("ALTER TABLE sessions ADD COLUMN project_tag TEXT;")
+                    except sqlite3.OperationalError:
+                        pass
+                    c.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (4)")
                 
                 # Always ensure profiled_at column exists (safe migration)
                 try:
@@ -116,7 +134,7 @@ class ULMDatabase:
                     pass  # Column already exists
                 
                 conn.commit()
-            print("[+] ULM SQLite Database successfully initialized with WAL Mode and Schema Version 3.")
+            print("[+] ULM SQLite Database successfully initialized with WAL Mode and Schema Version 4.")
         except sqlite3.Error as e:
             print(f"[-] Error initializing database: {e}")
 
@@ -147,19 +165,21 @@ class ULMDatabase:
                     session_id = session["chat_id"]
                     last_mutated = session["last_mutated"]
                     messages = session["messages"]
+                    project_tag = session.get("project_tag")
                     
                     topics = "Programming/Troubleshooting"
                     
                     # 1. Upsert session
-                    c.execute("SELECT created_at, summary FROM sessions WHERE session_id = ?", (session_id,))
+                    c.execute("SELECT created_at, summary, project_tag FROM sessions WHERE session_id = ?", (session_id,))
                     row = c.fetchone()
                     created_at = row[0] if row else last_mutated
                     summary = row[1] if row else None
+                    active_tag = project_tag if project_tag else (row[2] if row else None)
                     
                     c.execute("""
-                        INSERT OR REPLACE INTO sessions (session_id, source, created_at, updated_at, topics, summary)
-                        VALUES (?, ?, ?, ?, ?, ?)
-                    """, (session_id, "antigravity", created_at, last_mutated, topics, summary))
+                        INSERT OR REPLACE INTO sessions (session_id, source, created_at, updated_at, topics, summary, project_tag)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """, (session_id, "antigravity", created_at, last_mutated, topics, summary, active_tag))
                     synced_sessions += 1
                     
                     # 2. Collect messages for batch insert
@@ -217,20 +237,21 @@ class ULMDatabase:
             print(f"[-] Error during batch SQLite ingestion: {e}")
             return 0, 0
 
-    def upsert_session(self, session_id, source, topics, summary=None, conn=None):
+    def upsert_session(self, session_id, source, topics, summary=None, project_tag=None, conn=None):
         now = datetime.datetime.now(datetime.timezone.utc).isoformat()
         
         def _execute(connection):
             c = connection.cursor()
-            c.execute("SELECT created_at, summary FROM sessions WHERE session_id = ?", (session_id,))
+            c.execute("SELECT created_at, summary, project_tag FROM sessions WHERE session_id = ?", (session_id,))
             row = c.fetchone()
             created_at = row[0] if row else now
             active_summary = summary if summary else (row[1] if row else None)
+            active_tag = project_tag if project_tag else (row[2] if row else None)
             
             c.execute("""
-                INSERT OR REPLACE INTO sessions (session_id, source, created_at, updated_at, topics, summary)
-                VALUES (?, ?, ?, ?, ?, ?)
-            """, (session_id, source, created_at, now, topics, active_summary))
+                INSERT OR REPLACE INTO sessions (session_id, source, created_at, updated_at, topics, summary, project_tag)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (session_id, source, created_at, now, topics, active_summary, active_tag))
             
         if conn:
             _execute(conn)
@@ -270,19 +291,20 @@ class ULMDatabase:
             except sqlite3.Error as e:
                 print(f"[-] Error inserting message: {e}")
 
-    def upsert_fact(self, fact, category, confidence, conn=None):
+    def upsert_fact(self, fact, category, confidence, project_tag=None, conn=None):
         now = datetime.datetime.now(datetime.timezone.utc).isoformat()
         fact_id = hashlib.sha256(fact.strip().lower().encode('utf-8')).hexdigest()[:16]
         
         def _execute(connection):
             c = connection.cursor()
-            c.execute("SELECT first_seen FROM facts WHERE fact_id = ?", (fact_id,))
+            c.execute("SELECT first_seen, project_tag FROM facts WHERE fact_id = ?", (fact_id,))
             row = c.fetchone()
             first_seen = row[0] if row else now
+            active_tag = project_tag if project_tag else (row[1] if row else None)
             c.execute("""
-                INSERT OR REPLACE INTO facts (fact_id, fact, category, confidence, first_seen, last_seen)
-                VALUES (?, ?, ?, ?, ?, ?)
-            """, (fact_id, fact, category, confidence, first_seen, now))
+                INSERT OR REPLACE INTO facts (fact_id, fact, category, confidence, first_seen, last_seen, project_tag)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (fact_id, fact, category, confidence, first_seen, now, active_tag))
             
         if conn:
             _execute(conn)
@@ -342,7 +364,7 @@ class ULMDatabase:
             print(f"[-] Error retrieving recent context: {e}")
             return []
 
-    def upsert_profile_metric(self, category, name, description, confidence, conn=None):
+    def upsert_profile_metric(self, category, name, description, confidence, project_tag=None, conn=None):
         import hashlib
         now = datetime.datetime.now(datetime.timezone.utc).isoformat()
         metric_id = hashlib.sha256(f"{category}:{name}".encode('utf-8')).hexdigest()[:16]
@@ -350,19 +372,21 @@ class ULMDatabase:
         def _execute(connection):
             c = connection.cursor()
             # Check if metric already exists to update frequency and last_seen
-            c.execute("SELECT first_seen, frequency FROM developer_profile WHERE metric_id = ?", (metric_id,))
+            c.execute("SELECT first_seen, frequency, project_tag FROM developer_profile WHERE metric_id = ?", (metric_id,))
             row = c.fetchone()
             if row:
                 first_seen = row[0]
                 frequency = row[1] + 1
+                active_tag = project_tag if project_tag else row[2]
             else:
                 first_seen = now
                 frequency = 1
+                active_tag = project_tag
                 
             c.execute("""
-                INSERT OR REPLACE INTO developer_profile (metric_id, category, name, description, confidence, frequency, first_seen, last_seen)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """, (metric_id, category, name, description, confidence, frequency, first_seen, now))
+                INSERT OR REPLACE INTO developer_profile (metric_id, category, name, description, confidence, frequency, first_seen, last_seen, project_tag)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (metric_id, category, name, description, confidence, frequency, first_seen, now, active_tag))
             
         if conn:
             _execute(conn)
@@ -374,15 +398,42 @@ class ULMDatabase:
             except sqlite3.Error as e:
                 print(f"[-] Error upserting developer profile metric: {e}")
 
-    def get_developer_profile(self):
+    def get_developer_profile(self, limit=None, project_tag=None):
         try:
             with self.get_connection() as conn:
                 conn.row_factory = sqlite3.Row
                 c = conn.cursor()
-                c.execute("SELECT category, name, description, confidence, frequency, first_seen, last_seen FROM developer_profile ORDER BY last_seen DESC")
+                if project_tag:
+                    query = "SELECT category, name, description, confidence, frequency, first_seen, last_seen, project_tag FROM developer_profile WHERE project_tag = ? OR project_tag IS NULL ORDER BY (project_tag = ?) DESC, last_seen DESC"
+                    params = (project_tag, project_tag)
+                else:
+                    query = "SELECT category, name, description, confidence, frequency, first_seen, last_seen, project_tag FROM developer_profile ORDER BY last_seen DESC"
+                    params = ()
+                if limit:
+                    query += f" LIMIT {int(limit)}"
+                c.execute(query, params)
                 return [dict(r) for r in c.fetchall()]
         except sqlite3.Error as e:
             print(f"[-] Error retrieving developer profile: {e}")
+            return []
+
+    def get_facts(self, limit=None, project_tag=None):
+        try:
+            with self.get_connection() as conn:
+                conn.row_factory = sqlite3.Row
+                c = conn.cursor()
+                if project_tag:
+                    query = "SELECT fact_id, fact, category, confidence, first_seen, last_seen, project_tag FROM facts WHERE project_tag = ? OR project_tag IS NULL ORDER BY (project_tag = ?) DESC, last_seen DESC"
+                    params = (project_tag, project_tag)
+                else:
+                    query = "SELECT fact_id, fact, category, confidence, first_seen, last_seen, project_tag FROM facts ORDER BY last_seen DESC"
+                    params = ()
+                if limit:
+                    query += f" LIMIT {int(limit)}"
+                c.execute(query, params)
+                return [dict(r) for r in c.fetchall()]
+        except sqlite3.Error as e:
+            print(f"[-] Error retrieving facts: {e}")
             return []
 
     def get_unprofiled_sessions(self):

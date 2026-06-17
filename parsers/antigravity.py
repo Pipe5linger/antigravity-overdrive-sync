@@ -102,13 +102,14 @@ class AntigravityParser(BaseParser):
                     
                     print(f"[+] Found session/file: {item}")
                     with open(transcript_path, 'r', encoding='utf-8') as f:
-                        messages = adapter.parse(f.read())
+                        messages, project_tag = adapter.parse(f.read())
                     
                     if messages:
                         extracted_payloads.append({
                             "chat_id": item,
                             "last_mutated": datetime.fromtimestamp(mtime).isoformat(),
-                            "messages": messages
+                            "messages": messages,
+                            "project_tag": project_tag
                         })
         
         if extracted_payloads:

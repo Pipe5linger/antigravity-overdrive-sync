@@ -1,4 +1,5 @@
 import json
+import os
 from datetime import datetime
 
 class GeminiNormalizer:
@@ -18,17 +19,33 @@ class GeminiNormalizer:
                     })
         except json.JSONDecodeError:
             print("[-] GeminiNormalizer: Failed to parse JSON.")
-        return normalized
+        return normalized, None
 
 class AntigravityNormalizer:
     def parse(self, file_content):
         """Adapter for your existing .jsonl system generated logs."""
         normalized = []
+        project_tag = None
         for line in file_content.splitlines():
             if not line.strip():
                 continue
             try:
                 event = json.loads(line)
+                
+                # Check for Cwd in tool_calls to identify active project workspace tag
+                if not project_tag and "tool_calls" in event:
+                    for tc in event.get("tool_calls", []):
+                        args = tc.get("args", {})
+                        if isinstance(args, str):
+                            try:
+                                args = json.loads(args)
+                            except:
+                                pass
+                        if isinstance(args, dict) and "Cwd" in args:
+                            cwd_val = args["Cwd"]
+                            if cwd_val and isinstance(cwd_val, str):
+                                project_tag = os.path.basename(cwd_val.strip().strip('"\'').rstrip("\\/"))
+                
                 event_type = event.get("type")
                 if event_type in ["USER_INPUT", "PLANNER_RESPONSE", "MODEL_RESPONSE"]:
                     text = event.get("content", "").strip()
@@ -41,4 +58,4 @@ class AntigravityNormalizer:
                         })
             except json.JSONDecodeError:
                 continue
-        return normalized
+        return normalized, project_tag

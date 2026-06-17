@@ -69,10 +69,21 @@ class ULMDaemon:
                 if unprofiled:
                     print(f"[*] Daemon: Found {len(unprofiled)} unprofiled sessions. Running evaluator...")
                     for s_id in unprofiled:
-                        if evaluator.evaluate_session(self.db, s_id):
-                            self.db.mark_session_profiled(s_id)
+                        try:
+                            if evaluator.evaluate_session(self.db, s_id):
+                                self.db.mark_session_profiled(s_id)
+                        except Exception as e:
+                            print(f"[-] Daemon: Profile evaluation failed for session {s_id[:8]}: {e}")
             except Exception as e:
                 print(f"[-] Daemon: Profile evaluation failed: {e}")
+            
+            # Run memory consolidator to resolve fact conflicts
+            try:
+                from core.consolidator import MemoryConsolidator
+                consolidator = MemoryConsolidator(self.db)
+                consolidator.consolidate()
+            except Exception as e:
+                print(f"[-] Daemon: Fact consolidation failed: {e}")
             
             # Refresh rules
             injector = ClineRulesInjector()
@@ -88,6 +99,9 @@ class ULMDaemon:
         
         # Initial scan to establish baseline
         self.scan_transcripts()
+        
+        # Proactively run a sync cycle on startup to process any offline updates or unprofiled sessions
+        self.run_sync_cycle()
         
         try:
             while True:

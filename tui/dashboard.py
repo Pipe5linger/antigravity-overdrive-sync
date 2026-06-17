@@ -40,6 +40,7 @@ class ULMTUIDashboard:
             "total_sessions": 0,
             "total_messages": 0,
             "total_facts": 0,
+            "total_profile_metrics": 0,
             "total_preferences": 0
         }
         
@@ -68,6 +69,10 @@ class ULMTUIDashboard:
                 c.execute("SELECT COUNT(*) FROM facts;")
                 stats["total_facts"] = c.fetchone()[0]
                 
+                # Get developer profile metrics count
+                c.execute("SELECT COUNT(*) FROM developer_profile;")
+                stats["total_profile_metrics"] = c.fetchone()[0]
+                
                 # Get preferences count
                 c.execute("SELECT COUNT(*) FROM preferences;")
                 stats["total_preferences"] = c.fetchone()[0]
@@ -93,6 +98,7 @@ class ULMTUIDashboard:
         table.add_row("Active Sessions", str(stats["total_sessions"]))
         table.add_row("Synced Messages", str(stats["total_messages"]))
         table.add_row("Extracted Facts", str(stats["total_facts"]))
+        table.add_row("Profile Metrics", str(stats["total_profile_metrics"]))
         table.add_row("Preferences Stored", str(stats["total_preferences"]))
 
         return Panel(table, title="[bold cyan]Database Statistics[/bold cyan]", border_style="cyan")
@@ -145,10 +151,12 @@ class ULMTUIDashboard:
         try:
             from parsers.antigravity import AntigravityParser
             from injectors.gemini_md import GeminiMdInjector
+            from core.profile_evaluator import ProfileEvaluator
             
             # Initialize parser/injector
             log_parser = AntigravityParser()
             memory_injector = GeminiMdInjector()
+            evaluator = ProfileEvaluator()
             
             with self.console.status("[bold green]Importing transcript logs...[/bold green]", spinner="dots"):
                 new_logs = log_parser.fetch_new_logs()
@@ -157,6 +165,22 @@ class ULMTUIDashboard:
                     self.add_log(f"Staged {synced_s} sessions, {synced_m} messages.")
                 else:
                     self.add_log("ETL Complete: No new session modifications detected.")
+
+            with self.console.status("[bold green]Evaluating developer profile...[/bold green]", spinner="dots"):
+                unprofiled = self.db.get_unprofiled_sessions()
+                if unprofiled:
+                    self.add_log(f"Found {len(unprofiled)} unprofiled sessions. Evaluating...")
+                    evaluated_count = 0
+                    for s_id in unprofiled:
+                        try:
+                            if evaluator.evaluate_session(self.db, s_id):
+                                self.db.mark_session_profiled(s_id)
+                                evaluated_count += 1
+                        except Exception as e:
+                            self.add_log(f"Profile evaluation failed for {s_id[:8]}: {e}")
+                    self.add_log(f"Evaluated {evaluated_count}/{len(unprofiled)} sessions.")
+                else:
+                    self.add_log("No unprofiled sessions to evaluate.")
                     
             with self.console.status("[bold green]Reinjecting memories...[/bold green]", spinner="dots"):
                 success = memory_injector.inject(self.db, dry_run=False)
@@ -276,7 +300,10 @@ class ULMTUIDashboard:
 
     def view_profile(self):
         self.console.clear()
-        self.console.print(Panel(Align.center(Text("👤 DEVELOPER PROGRESS PROFILE 👤", style="bold green")), border_style="green"))
+        stats = self.get_db_stats()
+        total = stats.get("total_profile_metrics", 0)
+        header_text = f"👤 DEVELOPER PROGRESS PROFILE (Showing latest 50 of {total}) 👤"
+        self.console.print(Panel(Align.center(Text(header_text, style="bold green")), border_style="green"))
         
         table = Table(expand=True)
         table.add_column("Category", style="cyan")
@@ -287,7 +314,7 @@ class ULMTUIDashboard:
         table.add_column("Last Observed", style="blue", width=20)
 
         try:
-            profile = self.db.get_developer_profile()
+            profile = self.db.get_developer_profile(limit=50)
             for r in profile:
                 conf_str = f"{r['confidence'] * 100:.1f}%" if r['confidence'] else "N/A"
                 last_seen_str = r['last_seen'].split(".")[0] if r['last_seen'] else "N/A"

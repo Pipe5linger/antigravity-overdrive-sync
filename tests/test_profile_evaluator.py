@@ -1,4 +1,4 @@
-﻿import unittest
+import unittest
 from unittest.mock import patch, MagicMock
 import os
 import sqlite3
@@ -74,7 +74,7 @@ class TestProfileEvaluator(unittest.TestCase):
         with patch.object(self.db, "upsert_profile_metric") as mock_upsert:
             success = self.evaluator.evaluate_session(self.db, self.session_id)
             self.assertTrue(success)
-            mock_upsert.assert_called_once_with("strength", "sqlite-wal-understanding", "Demonstrated understanding of SQLite WAL concurrency advantages.", 0.95)
+            mock_upsert.assert_called_once_with("strength", "sqlite-wal-understanding", "Demonstrated understanding of SQLite WAL concurrency advantages.", 0.95, project_tag=None)
 
     @patch("urllib.request.urlopen")
     def test_evaluate_session_cloud_gemini(self, mock_urlopen):
@@ -112,7 +112,7 @@ class TestProfileEvaluator(unittest.TestCase):
         with patch.object(self.db, "upsert_profile_metric") as mock_upsert:
             success = self.evaluator.evaluate_session(self.db, self.session_id)
             self.assertTrue(success)
-            mock_upsert.assert_called_once_with("milestone", "git-setup", "Completed repository tracking setup.", 0.85)
+            mock_upsert.assert_called_once_with("milestone", "git-setup", "Completed repository tracking setup.", 0.85, project_tag=None)
 
 if __name__ == "__main__":
     unittest.main()
