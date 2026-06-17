@@ -107,6 +107,7 @@ class AntigravityParser(BaseParser):
                     if messages:
                         extracted_payloads.append({
                             "chat_id": item,
+                            "last_mutated": datetime.fromtimestamp(mtime).isoformat(),
                             "messages": messages
                         })
         
