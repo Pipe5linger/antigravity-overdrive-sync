@@ -379,7 +379,7 @@ class ULMDatabase:
             with self.get_connection() as conn:
                 conn.row_factory = sqlite3.Row
                 c = conn.cursor()
-                c.execute("SELECT category, name, description, confidence, frequency, first_seen, last_seen FROM developer_profile ORDER BY category, last_seen DESC")
+                c.execute("SELECT category, name, description, confidence, frequency, first_seen, last_seen FROM developer_profile ORDER BY last_seen DESC")
                 return [dict(r) for r in c.fetchall()]
         except sqlite3.Error as e:
             print(f"[-] Error retrieving developer profile: {e}")
