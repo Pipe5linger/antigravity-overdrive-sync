@@ -61,6 +61,19 @@ class ULMDaemon:
             self.db.import_raw_logs(new_logs)
             print(f"[+] Daemon: Ingested {len(new_logs)} session deltas to database.")
             
+            # Evaluate new sessions
+            try:
+                from core.profile_evaluator import ProfileEvaluator
+                evaluator = ProfileEvaluator()
+                unprofiled = self.db.get_unprofiled_sessions()
+                if unprofiled:
+                    print(f"[*] Daemon: Found {len(unprofiled)} unprofiled sessions. Running evaluator...")
+                    for s_id in unprofiled:
+                        if evaluator.evaluate_session(self.db, s_id):
+                            self.db.mark_session_profiled(s_id)
+            except Exception as e:
+                print(f"[-] Daemon: Profile evaluation failed: {e}")
+            
             # Refresh rules
             injector = ClineRulesInjector()
             if injector.inject(self.db):

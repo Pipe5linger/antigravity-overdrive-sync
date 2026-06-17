@@ -108,6 +108,19 @@ def main():
             if not args.dry_run:
                 db.import_raw_logs(new_logs)
                 print(f"[+] ETL Complete: Ingested {len(new_logs)} session modifications.")
+                
+                # Evaluate new sessions
+                try:
+                    from core.profile_evaluator import ProfileEvaluator
+                    evaluator = ProfileEvaluator()
+                    unprofiled = db.get_unprofiled_sessions()
+                    if unprofiled:
+                        print(f"[*] Running developer profile evaluation on {len(unprofiled)} sessions...")
+                        for s_id in unprofiled:
+                            if evaluator.evaluate_session(db, s_id):
+                                db.mark_session_profiled(s_id)
+                except Exception as e:
+                    print(f"[-] Profile evaluation failed: {e}")
         else:
             print("[*] No new logs detected.")
 
