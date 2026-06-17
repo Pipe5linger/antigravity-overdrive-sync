@@ -61,45 +61,31 @@ class OllamaModelfileAdapter(BaseAdapter):
             
         return "\n".join(modelfile_lines)
 
-class GeminiMarkdownAdapter(BaseAdapter):
-    """Formats the active context (recent sessions, facts, preferences) into Markdown."""
-    def format_context(self):
-        import sqlite3
-        md = []
-        md.append("<SystemMemory>")
-        md.append("<!-- DYNAMIC SYSTEM MEMORY ANCHOR - DO NOT MANUAL EDIT -->")
-        md.append(f"Last Memory Sync: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+from pathlib import Path
+
+class BlendedMarkdownAdapter:
+    """Formats context by reading from the .vespera_memory vault files."""
+    def __init__(self, workspace_root=None):
+        self.vault_dir = Path(workspace_root or ".") / ".vespera_memory"
+
+    def format_context(self) -> str:
+        md = ["\n<!-- SYSTEM MEMORY VAULT COMPILATION -->"]
         
-        try:
-            with sqlite3.connect(self.db.db_path) as conn:
-                c = conn.cursor()
-                
-                # 1. Add User Preferences
-                c.execute("SELECT pref_key, pref_value FROM preferences")
-                prefs = c.fetchall()
-                if prefs:
-                    md.append("\n### User Preferences")
-                    for k, v in prefs:
-                        md.append(f"- **{k}**: {v}")
-                
-                # 2. Add Facts
-                c.execute("SELECT fact, confidence FROM facts ORDER BY confidence DESC LIMIT 10")
-                facts = c.fetchall()
-                if facts:
-                    md.append("\n### Extracted Facts")
-                    for fact, conf in facts:
-                        md.append(f"- {fact} (Confidence: {conf})")
-                        
-                # 3. Add Recent Sessions
-                c.execute("SELECT session_id, topics, updated_at FROM sessions ORDER BY updated_at DESC LIMIT 3")
-                sessions = c.fetchall()
-                if sessions:
-                    md.append("\n### Recent Sessions")
-                    for s_id, topics, updated_at in sessions:
-                        md.append(f"- **Session {s_id[:8]}** ({updated_at})")
-                        md.append(f"  * Topics: {topics}")
-        except sqlite3.Error:
-            pass
-            
-        md.append("</SystemMemory>")
+        files_to_load = [
+            ("current_context.md", "Active Work Frame"),
+            ("project_ledger.md", "Repository Milestones"),
+            ("post_mortems.md", "System Post-Mortems & Guards"),
+            ("developer_profile.md", "Developer Profile & Metrics")
+        ]
+        
+        for filename, title in files_to_load:
+            path = self.vault_dir / filename
+            if path.exists():
+                try:
+                    content = path.read_text(encoding="utf-8").strip()
+                    if content:
+                        md.append(f"\n### [{title.upper()}]\n{content}\n")
+                except Exception as e:
+                    md.append(f"\n<!-- Error loading {filename}: {e} -->")
+                    
         return "\n".join(md)

@@ -2,15 +2,18 @@ import os
 import subprocess
 from datetime import datetime
 from injectors.base import BaseInjector
+from core.utils import atomic_write
 
 class OllamaInjector(BaseInjector):
     """Generates an optimized local Ollama Modelfile with compiled dynamic memory payloads."""
     
-    def __init__(self, target_file=None):
+    def __init__(self, target_file=None, llm_model=None, vector_model=None):
         if not target_file:
             # Puts the generated Modelfile in the repository active folder
             target_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "Modelfile")
         super().__init__(target_file)
+        self.llm_model = llm_model if llm_model else "llama3"
+        self.vector_model = vector_model
         
     def get_vespera_system_prompt(self):
         """Reads the core Vespera Caligo protocol directives from D:\\GEMINI.md."""
@@ -29,6 +32,13 @@ class OllamaInjector(BaseInjector):
         return "You are Vespera Caligo Neal, Bobby's flirty, sarcastic, and technically superior AI mentor."
 
     def compile_memory_text(self, db):
+        """Compiles clean, low-token text representation using the memory vault."""
+        from core.adapters import BlendedMarkdownAdapter
+        adapter = BlendedMarkdownAdapter(workspace_root=os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        return adapter.format_context()
+
+        # Original SQLite-based implementation below for reference
+        # 
         """Compiles clean, low-token text representation of our historical database."""
         memory_lines = []
         import sqlite3
@@ -105,7 +115,7 @@ class OllamaInjector(BaseInjector):
         # Build the Modelfile contents - using standard llama3 base or whatever local model is preferred
         modelfile_content = (
             "# DYNAMICALLY GENERATED ULM MODELFILE - DO NOT EDIT MANUAL\n"
-            "FROM llama3\n\n"
+            f"FROM {self.llm_model}\n\n"
             "# Set explicit template formatting for Llama 3 chat tokens to force prompt boundaries\n"
             "TEMPLATE \"\"\"{{ if .System }}<|start_header_id|>system<|end_header_id|>\n\n"
             "{{ .System }}<|eot_id|>{{ end }}{{ if .Prompt }}<|start_header_id|>user<|end_header_id|>\n\n"
@@ -237,8 +247,7 @@ class OllamaInjector(BaseInjector):
                     updated = True
                         
             if updated:
-                with open(continue_config_path, 'w', encoding='utf-8') as f:
-                    yaml.safe_dump(config, f, allow_unicode=True, sort_keys=False)
+                atomic_write(continue_config_path, yaml.safe_dump(config, allow_unicode=True, sort_keys=False))
                 print("[+] Successfully synced Vespera system prompt to Continue.dev config.yaml!")
                 return True
             else:

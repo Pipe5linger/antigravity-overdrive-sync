@@ -8,32 +8,18 @@ from datetime import datetime
 class ULMEngine:
     """Core coordinator engine handling state merging, deduplication, and atomic commits."""
     
-    def __init__(self, target_yaml=None):
+    def __init__(self, target_yaml=None, llm_model=None, vector_model=None):
+        # STRICT HARDCODED PATH: Prevents the script from running away to the C:\ drive
         if not target_yaml:
-            possible_dirs = [
-                Path(r"D:\AI\Antigravity outputs"),
-                Path(os.path.expanduser("~")) / "Desktop" / "Antigravity outputs",
-                Path(os.path.expanduser("~")) / ".ulm_sync"
-            ]
-            
-            output_dir = None
-            for d in possible_dirs:
-                try:
-                    if d.exists() or d.parent.exists():
-                        output_dir = d
-                        break
-                except:
-                    pass
-            
-            if not output_dir:
-                output_dir = Path(os.path.expanduser("~")) / ".ulm_sync"
-                
+            output_dir = Path(r"D:\AI\Antigravity outputs")
             if not output_dir.exists():
                 output_dir.mkdir(parents=True, exist_ok=True)
-                
             target_yaml = str(output_dir / "sync_state.yaml")
+            
         self.target_yaml = target_yaml
-        
+        self.llm_model = llm_model
+        self.vector_model = vector_model
+
     def load_existing_state(self):
         """Reads the current monolithic YAML database or returns an empty model."""
         if not os.path.exists(self.target_yaml):
@@ -45,12 +31,12 @@ class ULMEngine:
         except Exception as e:
             print(f"[-] Failure loading YAML database: {e}", file=sys.stderr)
             return {"metadata": {"last_updated": None, "total_chats": 0}, "chats": {}}
-            
+
     def merge_and_reconfigure(self, current_state, new_data):
         """Merges new log logs into the main YAML state database."""
         updated_chats = current_state.get("chats", {})
         mutations = 0
-
+        
         for session in new_data:
             c_id = session["chat_id"]
             incoming_logs = session["messages"]
@@ -67,15 +53,17 @@ class ULMEngine:
                 if len(incoming_logs) > len(existing_logs):
                     updated_chats[c_id]["log"] = incoming_logs
                     updated_chats[c_id]["last_mutated"] = last_mutated
+                    
                     # Clear out outdated cached summary to force dynamic regeneration
                     if "summary" in updated_chats[c_id]:
                         del updated_chats[c_id]["summary"]
                     mutations += 1
-
+                    
         # Recalculate metadata
         current_state["metadata"]["last_updated"] = datetime.now().isoformat()
         current_state["metadata"]["total_chats"] = len(updated_chats)
         current_state["chats"] = updated_chats
+        
         return current_state, mutations
 
     def commit_atomic_write(self, state_data, max_retries=5):
@@ -88,15 +76,14 @@ class ULMEngine:
                 # 1. Write data out safely to the hidden staging file
                 with open(temp_target, 'w', encoding='utf-8') as f:
                     yaml.dump(state_data, f, allow_unicode=True, sort_keys=False, default_flow_style=False)
-                
-                # 2. Perform the safe swap
-                if os.path.exists(self.target_yaml):
-                    os.remove(self.target_yaml)
-                os.rename(temp_target, self.target_yaml)
+                    
+                # 2. Perform the safe swap natively
+                # os.replace is atomic on Windows and won't blindly delete symlinks like os.remove
+                os.replace(temp_target, self.target_yaml)
                 return True
                 
             except Exception as e:
-                # If a thread collides or Google Drive locks the file, catch it here
+                # If a thread collides or the file is locked, catch it here
                 if attempt == max_retries - 1:
                     print(f"[-] Definitively failed to write state after {max_retries} attempts: {e}", file=sys.stderr)
                     if os.path.exists(temp_target):
@@ -105,13 +92,17 @@ class ULMEngine:
                         except:
                             pass
                     return False
-                
+                    
                 # Calculate a progressive wait time: 2^attempt + random decimal fraction
                 sleep_time = (2 ** attempt) + random.uniform(0, 1)
                 print(f"[!] File lock or collision detected. Retrying swap in {sleep_time:.2f} seconds...", file=sys.stderr)
                 time.sleep(sleep_time)
-                try:
-                    os.remove(temp_target)
-                except:
-                    pass
+                
+                # Clean up the staging file before the next loop
+                if os.path.exists(temp_target):
+                    try:
+                        os.remove(temp_target)
+                    except:
+                        pass
+                        
         return False

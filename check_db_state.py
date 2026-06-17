@@ -1,4 +1,15 @@
-import sqlite3
+ceback (most recent call last):
+  File "<stdin>", line 1, in <module>
+NameError: name 'client' is not defined
+>>> results = collection.peek(limit=10)
+Traceback (most recent call last):
+  File "<stdin>", line 1, in <module>
+NameError: name 'collection' is not defined
+>>> print(results)
+Traceback (most recent call last):
+  File "<stdin>", line 1, in <module>
+NameError: name 'results' is not defined
+>>> import sqlite3
 import os
 import sys
 from pathlib import Path

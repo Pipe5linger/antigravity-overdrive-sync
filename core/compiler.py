@@ -84,15 +84,14 @@ def extract_database_milestones():
         conn = sqlite3.connect(str(DB_PATH))
         cursor = conn.cursor()
         
-        # Pull total count of indexed threads/sessions
-        cursor.execute("SELECT COUNT(*) FROM conversations")
+        # Pull total count of indexed sessions
+        cursor.execute("SELECT COUNT(*) FROM sessions")
         total_sessions = cursor.fetchone()[0]
         
-        # Pull the last 3 conversation threads sorted by recency
-        # Adjust column names ('thread_id', 'updated_at', 'summary') if your schema differs
+        # Pull the last 3 sessions sorted by recency
         cursor.execute("""
-            SELECT thread_id, updated_at, summary 
-            FROM conversations 
+            SELECT session_id, updated_at, summary 
+            FROM sessions 
             ORDER BY updated_at DESC 
             LIMIT 3
         """)
@@ -105,8 +104,8 @@ def extract_database_milestones():
             memory_payload += f"  Last Memory Sync: {last_sync_date}\n\n"
             
             for row in rows:
-                thread_id, updated_at, summary = row
-                memory_payload += f"  - **Chat Thread {thread_id}** ({updated_at[:10]}):\n"
+                session_id, updated_at, summary = row
+                memory_payload += f"  - **Chat Thread {session_id}** ({updated_at[:10]}):\n"
                 memory_payload += f"    * Summary: {summary}\n\n"
         else:
             return default_template

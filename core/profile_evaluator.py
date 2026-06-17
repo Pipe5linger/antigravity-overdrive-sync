@@ -6,39 +6,19 @@ import urllib.error
 import sqlite3
 import datetime
 import time
-
-class TokenBucket:
-    def __init__(self, capacity, fill_rate):
-        self.capacity = capacity
-        self.fill_rate = fill_rate
-        self.tokens = capacity
-        self.last_fill = time.time()
-
-    def consume(self, tokens=1):
-        now = time.time()
-        elapsed = now - self.last_fill
-        self.last_fill = now
-        self.tokens = min(self.capacity, self.tokens + elapsed * self.fill_rate)
-        
-        if self.tokens >= tokens:
-            self.tokens -= tokens
-            return True
-            
-        required_tokens = tokens - self.tokens
-        wait_time = required_tokens / self.fill_rate
-        time.sleep(wait_time)
-        self.tokens = 0
-        self.last_fill = time.time()
-        return True
+from pathlib import Path
+from core.fact_extractor import QUOTA_LOCK_FILE, _check_quota_lock, _write_quota_lock
+from core.utils import TokenBucket
 
 class ProfileEvaluator:
     def __init__(self, api_key=None):
         self.api_key = api_key or os.getenv("GEMINI_API_KEY")
         self.limiter = TokenBucket(capacity=5.0, fill_rate=0.25)
-        self.quota_exhausted = False
+        self.quota_exhausted = _check_quota_lock()
+        if self.quota_exhausted:
+            import sys as _sys
+            print("[-] ProfileEvaluator: Quota lock active (429 hit within last 24h). Skipping API calls.", file=_sys.stderr)
         if not self.api_key:
-            # Try parsing from .env
-            from pathlib import Path
             try:
                 env_path = Path(__file__).resolve().parents[1] / ".env"
                 if env_path.exists():
@@ -54,6 +34,8 @@ class ProfileEvaluator:
 
     def evaluate_session(self, db, session_id):
         """Analyzes a single chat session and extracts profile metrics."""
+        if self.quota_exhausted:
+            return False
         if not self.api_key:
             print("[-] ProfileEvaluator: No API key found. Skipping evaluation.")
             return False
@@ -141,6 +123,7 @@ class ProfileEvaluator:
             except urllib.error.HTTPError as he:
                 if he.code == 429:
                     self.quota_exhausted = True
+                    _write_quota_lock()
                     print(f"[-] ProfileEvaluator: API quota exhausted (429) for session {session_id[:8]}. Halting.", file=sys.stderr)
                     return False
                 print(f"[-] ProfileEvaluator: API HTTP Error {he.code} for session {session_id[:8]}: {he.reason}", file=sys.stderr)

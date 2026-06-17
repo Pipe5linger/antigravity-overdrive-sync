@@ -16,7 +16,7 @@ from rich.status import Status
 # Import core components
 from core.engine import ULMEngine
 from core.database import ULMDatabase
-from core.adapters import GeminiMarkdownAdapter
+from core.adapters import BlendedMarkdownAdapter
 
 class ULMTUIDashboard:
     def __init__(self):

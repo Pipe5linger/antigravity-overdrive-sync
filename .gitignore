@@ -23,4 +23,5 @@ sync_state.db
 *-wal
 *-shm
 Modelfile.local
-*.prof
+*.prof/.vespera_memory/
+/.vespera_memory/
