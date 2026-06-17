@@ -29,8 +29,26 @@ Welcome! This is a local, multi-threaded pipeline built to grab AI chat historie
    ```
 5. **Start the background Daemon**:
    ```bash
-   python main.py daemon
-   ```
+    python main.py daemon
+    ```
+
+---
+
+## 🧪 Verification & Testing
+
+To ensure code integrity and prevent regressions, you can run the test suite in two ways:
+
+### 1. Native Testing
+If you have your virtual environment activated locally:
+```bash
+python -m unittest discover tests
+```
+
+### 2. Sterile Container Testing (Docker)
+If you want to run tests in an isolated, clean-room environment to ensure all dependencies are correctly defined (without polluting your local host):
+```bash
+docker run --rm -v "${PWD}:/workspace" -w /workspace python:3.11-slim bash -c "pip install -r requirements.txt && python -m unittest discover tests"
+```
 
 ---
 
