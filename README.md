@@ -15,22 +15,76 @@ Welcome! This is a local, multi-threaded pipeline built to grab AI chat historie
 
 ---
 
-## 📦 Getting Started
+## 📖 Step-by-Step Setup & User Guide
 
-1. **Clone the repository** and navigate to the root directory.
-2. **Install dependencies**:
-   ```bash
-   pip install -r requirements.txt
-   ```
-3. **Configure your environment**: Create a `.env` file based on `.env.example` to provide your API keys and local Ollama model options.
-4. **Run the Dashboard TUI**:
-   ```bash
-   python main.py tui
-   ```
-5. **Start the background Daemon**:
-   ```bash
-    python main.py daemon
-    ```
+Whether you want to run ULM as a background memory daemon or use the interactive console dashboard, here is how to get running in under 2 minutes:
+
+### 1. Requirements & Prerequisites
+- **Python 3.10+** (Python 3.11 recommended)
+- **Git**
+- Optional: **Ollama** or **KoboldCpp** (for local offline LLM summarization) or a **Google Gemini API Key** (for cloud summarization).
+
+### 2. Installation
+```bash
+# 1. Clone the repository
+git clone https://github.com/Pipe5linger/antigravity-overdrive-sync.git
+cd antigravity-overdrive-sync
+
+# 2. Create and activate a virtual environment (recommended)
+python -m venv venv
+# On Windows PowerShell:
+.\venv\Scripts\Activate.ps1
+# On Linux/macOS:
+source venv/bin/activate
+
+# 3. Install dependencies
+pip install -r requirements.txt
+```
+
+### 3. Environment Setup (`.env`)
+Create a `.env` file in the root directory:
+```env
+# Optional: Set Gemini API key for cloud summarization
+GEMINI_API_KEY="your-api-key-here"
+
+# Optional: Set local LLM model names for Ollama/Kobold
+LLM_MODEL="qwen2.5-coder-14b-32k-Vespera:latest"
+VECTOR_MODEL="nomic-embed-text:latest"
+```
+
+### 4. Running ULM
+
+#### Option A: Manual One-Shot Sync
+Scans all active workspace transcripts, updates the SQLite database, and compiles dynamic system prompts (`GEMINI.md` / `.clinerules`):
+```bash
+python main.py sync
+```
+
+#### Option B: Terminal Dashboard TUI
+Launches the interactive `rich`-powered console dashboard:
+```bash
+python main.py tui
+```
+
+#### Option C: Background Daemon Poller (Automated)
+Runs the lightweight poller loop to automatically sync memories whenever transcript files change in your workspace:
+```bash
+python main.py daemon
+```
+*Tip for Windows users*: You can run the daemon silently in the background without keeping a console window open using `sync_silent.vbs` or `daemon_silent.vbs`.
+
+---
+
+## 🛠️ How It Works (Architecture Overview)
+
+```text
+[ Transcript Logs ] ──(Stream Parser)──> [ SQLite WAL DB ] ──(Consolidator)──> [ Tier 1-4 Cores ] ──> [ GEMINI.md ]
+```
+
+1. **Ingest Phase**: Streams JSONL transcript logs from Roo-Cline / Antigravity workspace paths with O(1) memory overhead.
+2. **Indexing Phase**: Stores raw session messages, topics, and timestamps into `sync_state.db` using transactional SQLite WAL mode.
+3. **Consolidation Phase**: Fact extractor prunes duplicate facts, handles conflict resolution, and applies "fact aging."
+4. **Assembly Phase**: Dynamic prompt assembler generates hierarchical prompt files (`GEMINI.md`, `.clinerules`, or Ollama `Modelfile`) categorized into Tier 1 (Episodic), Tier 2 (Behavioral Profile), Tier 3 (Facts), and Tier 4 (Workstation Map).
 
 ---
 
