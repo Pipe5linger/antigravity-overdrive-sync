@@ -54,6 +54,11 @@ VECTOR_MODEL="nomic-embed-text:latest"
 
 ### 4. Running ULM
 
+ULM automatically detects chat transcripts from multiple sources:
+- **Google Antigravity IDE Sessions** (`~/.gemini/antigravity/brain/*/transcript.jsonl`)
+- **Roo-Cline & Cline Extension Transcripts** (`%APPDATA%/Code/User/globalStorage/.../tasks`)
+- **Gemini Web Chat Exports** (JSON & Markdown exports in `Downloads` or `Downloads/Gemini chats`)
+
 #### Option A: Manual One-Shot Sync
 Scans all active workspace transcripts, updates the SQLite database, and compiles dynamic system prompts (`GEMINI.md` / `.clinerules`):
 ```bash
@@ -78,10 +83,10 @@ python main.py daemon
 ## 🛠️ How It Works (Architecture Overview)
 
 ```text
-[ Transcript Logs ] ──(Stream Parser)──> [ SQLite WAL DB ] ──(Consolidator)──> [ Tier 1-4 Cores ] ──> [ GEMINI.md ]
+[ Antigravity / Roo-Cline / Gemini Logs ] ──(Stream Parser)──> [ SQLite WAL DB ] ──(Consolidator)──> [ Tier 1-4 Cores ] ──> [ GEMINI.md / .clinerules ]
 ```
 
-1. **Ingest Phase**: Streams JSONL transcript logs from Roo-Cline / Antigravity workspace paths with O(1) memory overhead.
+1. **Ingest Phase**: Streams transcript logs from Google Antigravity, Roo-Cline/Cline VSCode tasks, or Gemini web exports with O(1) memory overhead.
 2. **Indexing Phase**: Stores raw session messages, topics, and timestamps into `sync_state.db` using transactional SQLite WAL mode.
 3. **Consolidation Phase**: Fact extractor prunes duplicate facts, handles conflict resolution, and applies "fact aging."
 4. **Assembly Phase**: Dynamic prompt assembler generates hierarchical prompt files (`GEMINI.md`, `.clinerules`, or Ollama `Modelfile`) categorized into Tier 1 (Episodic), Tier 2 (Behavioral Profile), Tier 3 (Facts), and Tier 4 (Workstation Map).
