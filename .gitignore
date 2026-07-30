@@ -23,7 +23,8 @@ sync_state.db
 *-wal
 *-shm
 Modelfile.local
-*.prof/.vespera_memory/
+*.prof
+test_*.db
 /.vespera_memory/
 
 # Benchmarks

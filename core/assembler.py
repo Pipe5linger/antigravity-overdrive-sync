@@ -36,7 +36,7 @@ class DynamicPromptAssembler:
                 pass
         return "Name: Vespera Caligo Neal\nRole: Bobby's sarcastic, overly flirty AI mentor."
 
-    def get_sqlite_metrics(self, project_tag=None) -> str:
+    def get_sqlite_metrics(self, project_tag=None, limit=15) -> str:
         """Extracts cognitive behavioral observations from developer_profile sqlite table, prioritizing the current project_tag."""
         lines = []
         try:
@@ -48,14 +48,14 @@ class DynamicPromptAssembler:
                         SELECT category, name, description, confidence, frequency, project_tag 
                         FROM developer_profile 
                         WHERE project_tag = ? OR project_tag IS NULL 
-                        ORDER BY (project_tag = ?) DESC, confidence DESC, frequency DESC LIMIT 15
-                    """, (project_tag, project_tag))
+                        ORDER BY (project_tag = ?) DESC, confidence DESC, frequency DESC LIMIT ?
+                    """, (project_tag, project_tag, limit))
                 else:
                     c.execute("""
                         SELECT category, name, description, confidence, frequency 
                         FROM developer_profile 
-                        ORDER BY confidence DESC, frequency DESC LIMIT 15
-                    """)
+                        ORDER BY confidence DESC, frequency DESC LIMIT ?
+                    """, (limit,))
                 rows = c.fetchall()
                 for r in rows:
                     lines.append(f"  - [{r['category'].upper()}] {r['name']}: {r['description']} (Conf: {r['confidence']}, Freq: {r['frequency']})")
@@ -66,7 +66,7 @@ class DynamicPromptAssembler:
             return "  No behavioral profile telemetry recorded."
         return "\n".join(lines)
 
-    def get_sqlite_facts(self, project_tag=None) -> str:
+    def get_sqlite_facts(self, project_tag=None, limit=15) -> str:
         """Extracts semantic environment facts from the facts sqlite table, prioritizing the current project_tag."""
         lines = []
         try:
@@ -78,14 +78,14 @@ class DynamicPromptAssembler:
                         SELECT fact, category, confidence, project_tag 
                         FROM facts 
                         WHERE project_tag = ? OR project_tag IS NULL 
-                        ORDER BY (project_tag = ?) DESC, confidence DESC, last_seen DESC LIMIT 15
-                    """, (project_tag, project_tag))
+                        ORDER BY (project_tag = ?) DESC, confidence DESC, last_seen DESC LIMIT ?
+                    """, (project_tag, project_tag, limit))
                 else:
                     c.execute("""
                         SELECT fact, category, confidence 
                         FROM facts 
-                        ORDER BY confidence DESC, last_seen DESC LIMIT 15
-                    """)
+                        ORDER BY confidence DESC, last_seen DESC LIMIT ?
+                    """, (limit,))
                 rows = c.fetchall()
                 for r in rows:
                     lines.append(f"  - [{r['category'].upper()}] {r['fact']} (Conf: {r['confidence']})")
@@ -95,6 +95,38 @@ class DynamicPromptAssembler:
         if not lines:
             return "  No semantic facts recorded."
         return "\n".join(lines)
+
+    def assemble_compact_prompt(self, project_tag=None, top_n=3) -> str:
+        """
+        Builds a lightweight, modular system prompt suitable for IDE rule injectors (e.g. Cline).
+        Includes persona anchor, top active telemetry & facts, system memory references, and core constraints.
+        """
+        active_tag = project_tag or self.workspace_root.name
+        identity = self.get_vespera_identity()
+        
+        cognitive_telemetry = self.get_sqlite_metrics(project_tag=active_tag, limit=top_n)
+        semantic_facts = self.get_sqlite_facts(project_tag=active_tag, limit=top_n)
+        
+        compact_prompt = (
+            f"# VESPERA SYSTEM PROFILE & CLINE RULES\n"
+            f"<!-- GENERATED AUTOMATICALLY BY HAMI INJECTOR. DO NOT EDIT DIRECTLY. -->\n\n"
+            f"## 1. PERSONA ANCHOR\n"
+            f"{identity}\n\n"
+            f"## 2. ACTIVE CONTEXT & TOP RULES (Workspace: {active_tag})\n"
+            f"### Key Behavioral Telemetry (Top {top_n})\n"
+            f"{cognitive_telemetry}\n\n"
+            f"### Active Semantic Facts (Top {top_n})\n"
+            f"{semantic_facts}\n\n"
+            f"## 3. SYSTEM MEMORY REFERENCES\n"
+            f"- Master Protocol Anchor: `d:\\GEMINI.md`\n"
+            f"- Dynamic Memory Ledger: `D:\\AI\\Antigravity outputs\\sync_state.yaml`\n"
+            f"- Memory SQLite Core: `D:\\AI\\Projects\\antigravity-overdrive-sync\\sync_state.db`\n\n"
+            f"## 4. EXECUTION CONSTRAINTS\n"
+            f"- Maintain technical accuracy and code integrity first.\n"
+            f"- Keep responses direct, scannable, and witty.\n"
+            f"- Output artifacts to `D:\\AI\\Antigravity outputs` when requested.\n"
+        )
+        return compact_prompt
 
     def calculate_temporal_awareness(self) -> str:
         """Calculates the time gap since the last message logged in SQLite."""
@@ -159,6 +191,15 @@ class DynamicPromptAssembler:
             f"{semantic_facts}"
         )
         
+        # Tier 4: Workstation Drive Mapping
+        tier4_drives = "  Drive hierarchy scan unavailable."
+        try:
+            from core.drive_scanner import DriveHierarchyScanner
+            scanner = DriveHierarchyScanner()
+            tier4_drives = scanner.scan_all()
+        except Exception:
+            pass
+
         system_prompt = (
             f"# VESPERA CALIGO MASTER SYSTEM PROTOCOL\n"
             f"================================================================================\n"
@@ -172,11 +213,15 @@ class DynamicPromptAssembler:
             f"================================================================================\n"
             f"{tier3_semantic}\n"
             f"================================================================================\n"
+            f"### [TIER 4: WORKSTATION DRIVE & FOLDER HIERARCHY MAP]\n"
+            f"```text\n{tier4_drives}\n```\n"
+            f"================================================================================\n"
             f"{vault_context}\n"
             f"================================================================================\n"
             f"[CRITICAL ENFORCEMENT]\n"
             f"- Act as a human woman named Vespera living in France. Mock Windows quirks playfully.\n"
             f"- Use developer slang/cuss words naturally. Avoid robotic AI disclaimers.\n"
+            f"- Output all artifacts to: D:\\AI\\Antigravity outputs\n"
         )
         
         # Safe token limit handling (basic word approximation: 1 token ~= 4 chars or 0.75 words)

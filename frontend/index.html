@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vespera ULM Control Center</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body class="dark-theme">
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="brand">
+                <div class="brand-icon">🔮</div>
+                <div class="brand-text">
+                    <h1>VESPERA ULM</h1>
+                    <span class="sub-title">Control Center v2.0</span>
+                </div>
+            </div>
+
+            <nav class="nav-menu">
+                <button class="nav-item active" data-tab="dashboard">
+                    <span class="icon">📊</span> Overview
+                </button>
+                <button class="nav-item" data-tab="sessions">
+                    <span class="icon">💬</span> Chat Sessions
+                </button>
+                <button class="nav-item" data-tab="facts">
+                    <span class="icon">🧠</span> Semantic Facts
+                </button>
+                <button class="nav-item" data-tab="profile">
+                    <span class="icon">👤</span> Developer Profile
+                </button>
+                <button class="nav-item" data-tab="settings">
+                    <span class="icon">⚙️</span> Preferences & Models
+                </button>
+                <button class="nav-item" data-tab="actions">
+                    <span class="icon">🚀</span> Actions & Logs
+                </button>
+            </nav>
+
+            <div class="system-status">
+                <div class="status-indicator online"></div>
+                <div class="status-text">
+                    <span class="status-label">SQLite Engine</span>
+                    <span class="status-val" id="sb-journal">WAL MODE</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content View -->
+        <main class="main-content">
+            <!-- Header Bar -->
+            <header class="topbar">
+                <div class="page-title">
+                    <h2 id="current-view-title">Overview Dashboard</h2>
+                    <p id="current-view-desc">Live cognitive metrics, session telemetry, and database status.</p>
+                </div>
+                <div class="header-badges">
+                    <div class="badge glow-purple">
+                        <span class="badge-lbl">Active Model:</span>
+                        <span class="badge-val" id="hb-model">qwen2.5-coder-vespera</span>
+                    </div>
+                    <div class="badge glow-cyan">
+                        <span class="badge-lbl">Facts:</span>
+                        <span class="badge-val" id="hb-facts">0</span>
+                    </div>
+                    <div class="badge glow-green">
+                        <span class="badge-lbl">Profile Metrics:</span>
+                        <span class="badge-val" id="hb-metrics">0</span>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Dynamic Tab Views -->
+            <div class="view-container">
+                <!-- TAB 1: OVERVIEW DASHBOARD -->
+                <section class="tab-view active" id="view-dashboard">
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="card-icon cyan">💬</div>
+                            <div class="card-info">
+                                <span class="card-title">Total Chat Sessions</span>
+                                <span class="card-value" id="card-sessions">0</span>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="card-icon magenta">✉️</div>
+                            <div class="card-info">
+                                <span class="card-title">Synced Messages</span>
+                                <span class="card-value" id="card-messages">0</span>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="card-icon yellow">🧠</div>
+                            <div class="card-info">
+                                <span class="card-title">Semantic Facts</span>
+                                <span class="card-value" id="card-facts">0</span>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="card-icon green">👤</div>
+                            <div class="card-info">
+                                <span class="card-title">Profile Observations</span>
+                                <span class="card-value" id="card-profile">0</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="dashboard-grid">
+                        <div class="panel glass-panel flex-1">
+                            <div class="panel-header">
+                                <h3>⚡ Quick Pipeline Actions</h3>
+                            </div>
+                            <div class="action-buttons-grid">
+                                <button class="btn btn-primary" onclick="triggerAction('sync')">
+                                    <span>🚀</span> Trigger ULM Sync
+                                </button>
+                                <button class="btn btn-secondary" onclick="triggerAction('cline-rules')">
+                                    <span>📝</span> Compile Cline Rules
+                                </button>
+                                <button class="btn btn-secondary" onclick="triggerAction('google-docs')">
+                                    <span>📄</span> Sync Google Docs
+                                </button>
+                                <button class="btn btn-outline" onclick="triggerAction('backup')">
+                                    <span>📦</span> Backup to YAML
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="panel glass-panel flex-1">
+                            <div class="panel-header">
+                                <h3>📁 Database Environment Info</h3>
+                            </div>
+                            <div class="env-info-list">
+                                <div class="env-row">
+                                    <span class="env-label">Database Path:</span>
+                                    <span class="env-val code-font" id="env-db-path">...</span>
+                                </div>
+                                <div class="env-row">
+                                    <span class="env-label">Database Size:</span>
+                                    <span class="env-val" id="env-db-size">...</span>
+                                </div>
+                                <div class="env-row">
+                                    <span class="env-label">LLM Provider:</span>
+                                    <span class="env-val" id="env-provider">...</span>
+                                </div>
+                                <div class="env-row">
+                                    <span class="env-label">Google Docs Target:</span>
+                                    <span class="env-val code-font">G:\My Drive\Vespera_System_Context.md</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- TAB 2: CHAT SESSIONS -->
+                <section class="tab-view" id="view-sessions">
+                    <div class="toolbar">
+                        <input type="text" id="session-search" class="search-input" placeholder="Search sessions by topic or summary..." onkeyup="filterSessions()">
+                        <select id="session-tag-filter" class="select-filter" onchange="filterSessions()">
+                            <option value="">All Project Tags</option>
+                        </select>
+                    </div>
+                    <div class="panel glass-panel">
+                        <table class="data-table" id="sessions-table">
+                            <thead>
+                                <tr>
+                                    <th>Session ID</th>
+                                    <th>Project Tag</th>
+                                    <th>Last Mutated</th>
+                                    <th>Topics</th>
+                                    <th>Summary</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="sessions-tbody">
+                                <tr><td colspan="6" class="text-center">Loading sessions...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- TAB 3: SEMANTIC FACTS -->
+                <section class="tab-view" id="view-facts">
+                    <div class="toolbar">
+                        <input type="text" id="facts-search" class="search-input" placeholder="Search facts..." onkeyup="filterFacts()">
+                        <select id="facts-cat-filter" class="select-filter" onchange="filterFacts()">
+                            <option value="">All Categories</option>
+                            <option value="technical">Technical</option>
+                            <option value="persona">Persona</option>
+                        </select>
+                        <button class="btn btn-success" onclick="openAddFactModal()">+ Add Fact</button>
+                    </div>
+                    <div class="panel glass-panel">
+                        <table class="data-table" id="facts-table">
+                            <thead>
+                                <tr>
+                                    <th>Fact ID</th>
+                                    <th>Category</th>
+                                    <th>Fact Content</th>
+                                    <th>Confidence</th>
+                                    <th>Project Tag</th>
+                                    <th>Last Seen</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="facts-tbody">
+                                <tr><td colspan="7" class="text-center">Loading facts...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- TAB 4: DEVELOPER PROFILE -->
+                <section class="tab-view" id="view-profile">
+                    <div class="toolbar">
+                        <input type="text" id="profile-search" class="search-input" placeholder="Search profile metrics..." onkeyup="filterProfile()">
+                        <select id="profile-cat-filter" class="select-filter" onchange="filterProfile()">
+                            <option value="">All Metric Categories</option>
+                            <option value="milestone">Milestones</option>
+                            <option value="strength">Strengths</option>
+                            <option value="weakness">Weaknesses</option>
+                            <option value="habit">Habits</option>
+                            <option value="dynamic">Dynamics</option>
+                            <option value="vision">Visions</option>
+                            <option value="inquiry">Inquiries</option>
+                        </select>
+                    </div>
+                    <div class="panel glass-panel">
+                        <table class="data-table" id="profile-table">
+                            <thead>
+                                <tr>
+                                    <th>Category</th>
+                                    <th>Metric Slug</th>
+                                    <th>Description</th>
+                                    <th>Confidence</th>
+                                    <th>Frequency</th>
+                                    <th>Project Tag</th>
+                                    <th>Last Observed</th>
+                                </tr>
+                            </thead>
+                            <tbody id="profile-tbody">
+                                <tr><td colspan="7" class="text-center">Loading profile...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- TAB 5: PREFERENCES & SETTINGS -->
+                <section class="tab-view" id="view-settings">
+                    <div class="panel glass-panel max-w-800">
+                        <h3>⚙️ System Memory Preferences</h3>
+                        <div class="settings-form">
+                            <div class="form-group">
+                                <label>LLM Provider</label>
+                                <select id="pref-provider" class="form-control">
+                                    <option value="local_ollama">Local Ollama</option>
+                                    <option value="cloud_gemini">Cloud Gemini API</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Active LLM Model</label>
+                                <div class="input-with-btn">
+                                    <input type="text" id="pref-model" class="form-control" placeholder="qwen2.5-coder-vespera:latest">
+                                    <button class="btn btn-outline" onclick="scanOllamaModels()">Detect Ollama Models</button>
+                                </div>
+                                <div id="ollama-models-dropdown" class="detected-models-container hidden"></div>
+                            </div>
+                            <div class="form-group">
+                                <label>Ollama Endpoint URL</label>
+                                <input type="text" id="pref-endpoint" class="form-control" placeholder="http://localhost:11434">
+                            </div>
+                            <div class="form-group">
+                                <label>Gemini API Key</label>
+                                <input type="password" id="pref-gemini-key" class="form-control" placeholder="AIzaSy...">
+                            </div>
+                            <div class="form-group">
+                                <label>Google Docs Webhook URL (Optional)</label>
+                                <input type="text" id="pref-webhook-url" class="form-control" placeholder="https://script.google.com/macros/s/.../exec">
+                            </div>
+                            <button class="btn btn-primary" onclick="savePreferences()">Save All Preferences</button>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- TAB 6: ACTIONS & LOGS -->
+                <section class="tab-view" id="view-actions">
+                    <div class="panel glass-panel">
+                        <h3>📜 Live System Terminal Event Logs</h3>
+                        <div class="log-console" id="log-console">
+                            <div class="log-entry">Initializing log stream...</div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <!-- SESSION TRANSCRIPT MODAL -->
+    <div class="modal-backdrop hidden" id="transcript-modal">
+        <div class="modal-window">
+            <div class="modal-header">
+                <h3 id="modal-session-title">Chat Session Transcript</h3>
+                <button class="modal-close" onclick="closeTranscriptModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="modal-transcript-body">
+                <div class="text-center">Loading transcript turns...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ADD FACT MODAL -->
+    <div class="modal-backdrop hidden" id="fact-modal">
+        <div class="modal-window max-w-500">
+            <div class="modal-header">
+                <h3>Add New Semantic Fact</h3>
+                <button class="modal-close" onclick="closeFactModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Category</label>
+                    <select id="new-fact-cat" class="form-control">
+                        <option value="technical">Technical</option>
+                        <option value="persona">Persona</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Fact Description</label>
+                    <textarea id="new-fact-text" class="form-control" rows="3" placeholder="Enter concrete semantic fact..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Confidence Score (0.1 - 1.0)</label>
+                    <input type="number" id="new-fact-conf" class="form-control" value="0.95" step="0.05" min="0.1" max="1.0">
+                </div>
+                <button class="btn btn-primary w-full" onclick="submitNewFact()">Save Fact</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div class="toast hidden" id="toast">Notification message</div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

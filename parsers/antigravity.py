@@ -144,7 +144,7 @@ class AntigravityParser(BaseParser):
 
 if __name__ == "__main__":
     TARGET_LOG_DIR = r"D:\Memory\Unified_Ingest"
-    TARGET_MODEL = "qwen2.5-coder:14b"
+    TARGET_MODEL = "qwen2.5-coder-vespera:latest"
     
     print(f"\n[INIT] Starting Pipeline at {TARGET_LOG_DIR}")
     parser = AntigravityParser(source_dirs=[TARGET_LOG_DIR], llm_model=TARGET_MODEL)

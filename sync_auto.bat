@@ -25,7 +25,9 @@ if %errorlevel% neq 0 (
 )
 
 :: Run pipeline non-interactively
-%PYTHON_EXE% main.py --parser antigravity --injector gemini_md --backup
+%PYTHON_EXE% main.py --parser antigravity --injector gemini_md --manual --backup
+%PYTHON_EXE% main.py --parser antigravity --injector google_docs --manual
+%PYTHON_EXE% main.py --parser antigravity --injector cline_rules --manual
 
 if %errorlevel% neq 0 (
     echo [ERROR] ULM sync pipeline failed with exit code %errorlevel%

@@ -4,8 +4,66 @@ from datetime import datetime
 
 class GeminiNormalizer:
     def parse(self, file_content):
-        """Adapter for manually exported Gemini chat JSON files."""
+        """Adapter for manually exported Gemini chat JSON or Markdown files."""
         normalized = []
+        
+        # Check if the content is Markdown
+        if file_content.strip().startswith("#") or "## Prompt:" in file_content:
+            current_role = None
+            current_lines = []
+            
+            for line in file_content.splitlines():
+                if line.startswith("## Prompt:"):
+                    # Save previous block
+                    if current_role and current_lines:
+                        text = "\n".join(current_lines).strip()
+                        if len(text) > 10:
+                            normalized.append({
+                                "sender": current_role,
+                                "text": text,
+                                "timestamp": datetime.now().isoformat()
+                            })
+                    current_role = "Pilot"
+                    current_lines = []
+                elif line.startswith("## Response:"):
+                    # Save previous block
+                    if current_role and current_lines:
+                        text = "\n".join(current_lines).strip()
+                        if len(text) > 10:
+                            normalized.append({
+                                "sender": current_role,
+                                "text": text,
+                                "timestamp": datetime.now().isoformat()
+                            })
+                    current_role = "Vespera"
+                    current_lines = []
+                elif line.startswith("## ") and not line.startswith("## Prompt:") and not line.startswith("## Response:"):
+                    # Any other heading resets current role
+                    if current_role and current_lines:
+                        text = "\n".join(current_lines).strip()
+                        if len(text) > 10:
+                            normalized.append({
+                                "sender": current_role,
+                                "text": text,
+                                "timestamp": datetime.now().isoformat()
+                            })
+                    current_role = None
+                    current_lines = []
+                else:
+                    if current_role:
+                        current_lines.append(line)
+            
+            # Save final block
+            if current_role and current_lines:
+                text = "\n".join(current_lines).strip()
+                if len(text) > 10:
+                    normalized.append({
+                        "sender": current_role,
+                        "text": text,
+                        "timestamp": datetime.now().isoformat()
+                    })
+            return normalized, None
+            
         try:
             data = json.loads(file_content)
             for entry in data:

@@ -1,3 +1,4 @@
+# D:\AI\Projects\antigravity-overdrive-sync\core\consolidator.py
 import json
 import sqlite3
 import sys
@@ -12,6 +13,20 @@ class MemoryConsolidator:
         self.db = db
         self.api_key = api_key or os.getenv("GEMINI_API_KEY")
 
+    def _is_ollama_running(self, endpoint):
+        try:
+            res = requests.get(f"{endpoint.rstrip('/')}/api/tags", timeout=2)
+            return res.status_code == 200
+        except Exception:
+            return False
+
+    def _is_kobold_running(self, endpoint):
+        try:
+            res = requests.get(f"{endpoint.rstrip('/')}/api/v1/model", timeout=2)
+            return res.status_code == 200
+        except Exception:
+            return False
+
     def consolidate(self, project_tag=None):
         """
         Retrieves facts, detects contradictions/redundancies via LLM,
@@ -21,9 +36,10 @@ class MemoryConsolidator:
         llm_provider = self.db.get_preference("llm_provider", "local_ollama")
         llm_model = self.db.get_preference("llm_model", "qwen2.5-coder:14b")
         ollama_endpoint = self.db.get_preference("ollama_endpoint", "http://localhost:11434")
+        kobold_endpoint = self.db.get_preference("kobold_endpoint", "http://localhost:5001")
         gemini_api_key = self.api_key or self.db.get_preference("gemini_api_key")
 
-        # 2. Get all facts (or filter by project_tag if wanted, but global consolidation is better to see cross-project conflicts)
+        # 2. Get all facts
         facts = self.db.get_facts(limit=200, project_tag=None)
         if len(facts) < 2:
             # Not enough facts to consolidate
@@ -62,7 +78,33 @@ class MemoryConsolidator:
         }
 
         raw_result = None
-        if llm_provider == "local_ollama":
+        
+        # Autodetect or explicit check for local backend
+        is_kobold_active = (llm_provider == "local_kobold" or 
+                            (llm_provider == "local_ollama" and 
+                             not self._is_ollama_running(ollama_endpoint) and 
+                             self._is_kobold_running(kobold_endpoint)))
+
+        if is_kobold_active:
+            url = f"{kobold_endpoint.rstrip('/')}/v1/chat/completions"
+            payload = {
+                "model": "local",
+                "messages": [
+                    {"role": "system", "content": prompt_instructions},
+                    {"role": "user", "content": f"Facts to consolidate:\n{json.dumps(input_payload, indent=2)}"}
+                ],
+                "response_format": {"type": "json_object"},
+                "temperature": 0.2
+            }
+            try:
+                response = requests.post(url, json=payload, timeout=120)
+                response.raise_for_status()
+                raw_result = response.json()["choices"][0]["message"]["content"].strip()
+            except Exception as e:
+                print(f"[-] MemoryConsolidator: Local KoboldCpp consolidation failed: {e}", file=sys.stderr)
+                return 0, 0
+
+        elif llm_provider == "local_ollama":
             url = f"{ollama_endpoint.rstrip('/')}/api/generate"
             payload = {
                 "model": llm_model,
@@ -78,6 +120,7 @@ class MemoryConsolidator:
             except Exception as e:
                 print(f"[-] MemoryConsolidator: Ollama consolidation failed: {e}", file=sys.stderr)
                 return 0, 0
+                
         elif llm_provider == "cloud_gemini":
             if not gemini_api_key:
                 print("[-] MemoryConsolidator: Gemini key not configured.", file=sys.stderr)

@@ -12,6 +12,14 @@ if sys.platform.startswith("win"):
     except AttributeError:
         pass
 
+# Load environment variables from .env file overriding standard ones
+try:
+    from dotenv import load_dotenv
+    load_dotenv(override=True)
+except ImportError:
+    pass
+
+
 # Import core elements
 from core.database import ULMDatabase
 from core.engine import ULMEngine
@@ -43,6 +51,11 @@ def register_plugins():
         INJECTORS["cline_rules"] = ClineRulesInjector
     except Exception as e:
         print(f"[-] Failed to register ClineRulesInjector: {e}")
+    try:
+        from injectors.google_docs import GoogleDocsInjector
+        INJECTORS["google_docs"] = GoogleDocsInjector
+    except Exception as e:
+        print(f"[-] Failed to register GoogleDocsInjector: {e}")
 
 def backup_sqlite_to_yaml(db, engine):
     import yaml
@@ -72,7 +85,7 @@ def backup_sqlite_to_yaml(db, engine):
 def main():
     register_plugins()
     parser = argparse.ArgumentParser(description="Universal Local Memory (ULM) Agent Pipeline")
-    parser.add_argument("command", nargs="?", choices=["sync", "get-context", "tui", "daemon"], default="sync")
+    parser.add_argument("command", nargs="?", choices=["sync", "get-context", "tui", "webui", "daemon"], default="sync")
     parser.add_argument("--parser", choices=list(PARSERS.keys()), default="antigravity")
     parser.add_argument("--injector", choices=list(INJECTORS.keys()), default="gemini_md")
     parser.add_argument("--dry-run", action="store_true")
@@ -87,7 +100,11 @@ def main():
     db = ULMDatabase(db_path)
     db.initialize_db()
 
-    if args.command == "tui":
+    if args.command == "webui":
+        from web_server import run_server
+        run_server(port=8890)
+
+    elif args.command == "tui":
         from tui.dashboard import ULMTUIDashboard
         app = ULMTUIDashboard()
         app.start()

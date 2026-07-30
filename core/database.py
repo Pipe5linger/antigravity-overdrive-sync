@@ -1,6 +1,7 @@
 import sqlite3
 import datetime
 import hashlib
+import os
 
 class ULMDatabase:
     def __init__(self, db_path):
@@ -337,6 +338,11 @@ class ULMDatabase:
                 print(f"[-] Error setting preference: {e}")
 
     def get_preference(self, key, default=None):
+        # Allow environment variables to override SQLite preferences dynamically
+        env_key = key.upper()
+        if os.getenv(env_key):
+            return os.getenv(env_key)
+            
         try:
             with self.get_connection() as conn:
                 c = conn.cursor()

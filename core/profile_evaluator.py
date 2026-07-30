@@ -1,3 +1,4 @@
+# D:\AI\Projects\antigravity-overdrive-sync\core\evaluator.py
 import os
 import sys
 import json
@@ -12,12 +13,57 @@ class ProfileEvaluator:
         self.api_key = api_key or os.getenv("GEMINI_API_KEY")
         self.limiter = TokenBucket(capacity=5.0, fill_rate=0.25)
 
+    def _is_ollama_running(self, endpoint):
+        try:
+            res = requests.get(f"{endpoint.rstrip('/')}/api/tags", timeout=2)
+            return res.status_code == 200
+        except Exception:
+            return False
+
+    def _is_kobold_running(self, endpoint):
+        try:
+            res = requests.get(f"{endpoint.rstrip('/')}/api/v1/model", timeout=2)
+            return res.status_code == 200
+        except Exception:
+            return False
+
+    def _ensure_ollama_started(self, endpoint):
+        if self._is_ollama_running(endpoint):
+            return True
+        import time
+        ollama_bin = os.path.expanduser(r"~\AppData\Local\Programs\Ollama\ollama.exe")
+        if not os.path.isfile(ollama_bin):
+            ollama_bin = "ollama"
+        print(f"[+] ProfileEvaluator: Auto-launching local Ollama server ({ollama_bin})...")
+        try:
+            # Try routing through Command Center's log-streaming pipeline if importable
+            try:
+                import sys
+                cmd_center_path = r"D:\AI\Projects\command_center"
+                if cmd_center_path not in sys.path:
+                    sys.path.insert(0, cmd_center_path)
+                from app import launch_silent_and_pipe_logs
+                launch_silent_and_pipe_logs([ollama_bin, "serve"], "Ollama", None)
+            except Exception:
+                import subprocess
+                subprocess.Popen([ollama_bin, "serve"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
+
+            for _ in range(20):
+                time.sleep(0.5)
+                if self._is_ollama_running(endpoint):
+                    print("[+] ProfileEvaluator: Ollama server is online and ready!")
+                    return True
+        except Exception as e:
+            print(f"[-] ProfileEvaluator: Failed to auto-launch Ollama: {e}")
+        return False
+
     def evaluate_session(self, db, session_id):
         """Analyzes a single chat session and extracts profile metrics and facts."""
         # 1. Fetch preferences and session metadata from the db
         llm_provider = db.get_preference("llm_provider", "local_ollama")
-        llm_model = db.get_preference("llm_model", "qwen2.5-coder:14b")
+        llm_model = db.get_preference("llm_model", "qwen2.5-coder-vespera:latest")
         ollama_endpoint = db.get_preference("ollama_endpoint", "http://localhost:11434")
+        kobold_endpoint = db.get_preference("kobold_endpoint", "http://localhost:5001")
         gemini_api_key = self.api_key or db.get_preference("gemini_api_key")
 
         project_tag = None
@@ -70,19 +116,27 @@ class ProfileEvaluator:
 
         metrics = []
 
-        if llm_provider == "local_ollama":
-            url = f"{ollama_endpoint.rstrip('/')}/api/generate"
+        # Autodetect or explicit check
+        is_kobold_active = (llm_provider == "local_kobold" or 
+                            (llm_provider == "local_ollama" and 
+                             not self._is_ollama_running(ollama_endpoint) and 
+                             self._is_kobold_running(kobold_endpoint)))
+
+        if is_kobold_active:
+            url = f"{kobold_endpoint.rstrip('/')}/v1/chat/completions"
             payload = {
-                "model": llm_model,
-                "prompt": f"Analyze this dialogue:\n\n{dialogue_text}",
-                "system": prompt_instructions,
-                "stream": False,
-                "format": "json"
+                "model": "local",
+                "messages": [
+                    {"role": "system", "content": prompt_instructions},
+                    {"role": "user", "content": f"Analyze this dialogue:\n\n{dialogue_text}"}
+                ],
+                "response_format": {"type": "json_object"},
+                "temperature": 0.2
             }
             try:
                 response = requests.post(url, json=payload, timeout=120)
                 response.raise_for_status()
-                raw_output = response.json().get("response", "{}").strip()
+                raw_output = response.json()["choices"][0]["message"]["content"].strip()
                 result = json.loads(raw_output)
                 if isinstance(result, str):
                     try:
@@ -91,8 +145,61 @@ class ProfileEvaluator:
                         pass
                 metrics = result.get("metrics", []) if isinstance(result, dict) else []
             except Exception as e:
-                print(f"[-] ProfileEvaluator: Local Ollama generation failed: {e}", file=sys.stderr)
+                print(f"[-] ProfileEvaluator: Local KoboldCpp generation failed: {e}", file=sys.stderr)
                 return False
+
+        elif llm_provider == "local_ollama":
+            if not self._ensure_ollama_started(ollama_endpoint):
+                if self._is_kobold_running(kobold_endpoint):
+                    # Redirect to Kobold if available
+                    url = f"{kobold_endpoint.rstrip('/')}/v1/chat/completions"
+                    payload = {
+                        "model": "local",
+                        "messages": [
+                            {"role": "system", "content": prompt_instructions},
+                            {"role": "user", "content": f"Analyze this dialogue:\n\n{dialogue_text}"}
+                        ],
+                        "response_format": {"type": "json_object"},
+                        "temperature": 0.2
+                    }
+                    try:
+                        response = requests.post(url, json=payload, timeout=120)
+                        response.raise_for_status()
+                        raw_output = response.json()["choices"][0]["message"]["content"].strip()
+                        result = json.loads(raw_output)
+                        if isinstance(result, str):
+                            try: result = json.loads(result)
+                            except Exception: pass
+                        metrics = result.get("metrics", []) if isinstance(result, dict) else []
+                    except Exception as e:
+                        print(f"[-] ProfileEvaluator: KoboldCpp generation failed: {e}", file=sys.stderr)
+                        return False
+                else:
+                    # Neither Ollama nor Kobold is online - skip session evaluation gracefully
+                    return False
+            else:
+                url = f"{ollama_endpoint.rstrip('/')}/api/generate"
+                payload = {
+                    "model": llm_model,
+                    "prompt": f"Analyze this dialogue:\n\n{dialogue_text}",
+                    "system": prompt_instructions,
+                    "stream": False,
+                    "format": "json"
+                }
+                try:
+                    response = requests.post(url, json=payload, timeout=120)
+                    response.raise_for_status()
+                    raw_output = response.json().get("response", "{}").strip()
+                    result = json.loads(raw_output)
+                    if isinstance(result, str):
+                        try:
+                            result = json.loads(result)
+                        except Exception:
+                            pass
+                    metrics = result.get("metrics", []) if isinstance(result, dict) else []
+                except Exception as e:
+                    print(f"[-] ProfileEvaluator: Ollama generation failed: {e}", file=sys.stderr)
+                    return False
 
         elif llm_provider == "cloud_gemini":
             if not gemini_api_key:

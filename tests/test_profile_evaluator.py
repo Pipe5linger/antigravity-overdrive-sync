@@ -7,10 +7,12 @@ import json
 from core.database import ULMDatabase
 from core.profile_evaluator import ProfileEvaluator
 
+import tempfile
+
 class TestProfileEvaluator(unittest.TestCase):
     def setUp(self):
         # Use a temporary database file for test isolation
-        self.db_path = "test_temp.db"
+        self.db_fd, self.db_path = tempfile.mkstemp(suffix=".db")
         self.db = ULMDatabase(self.db_path)
         self.db.initialize_db()
         self.evaluator = ProfileEvaluator(api_key="TEST_API_KEY")
@@ -40,11 +42,11 @@ class TestProfileEvaluator(unittest.TestCase):
             conn.commit()
 
     def tearDown(self):
-        # Clean up temporary database file
+        os.close(self.db_fd)
         if os.path.exists(self.db_path):
             try:
                 os.remove(self.db_path)
-            except:
+            except OSError:
                 pass
 
     @patch("requests.post")
