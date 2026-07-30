@@ -66,14 +66,22 @@ class GeminiNormalizer:
             
         try:
             data = json.loads(file_content)
-            for entry in data:
-                text = entry.get("content", "").strip()
-                # NOISE FILTER: Skip empty or very short system stubs
+            # Handle object with 'messages' list (Gemini Exporter) or raw array
+            entries = data.get("messages", []) if isinstance(data, dict) else (data if isinstance(data, list) else [])
+            
+            for entry in entries:
+                if not isinstance(entry, dict):
+                    continue
+                role = entry.get("role", "")
+                text = (entry.get("say") or entry.get("content") or entry.get("text") or "").strip()
+                
+                # Filter noise & empty system stubs
                 if len(text) > 10:
+                    sender = "Pilot" if role in ["user", "Prompt", "user_feedback"] else "Vespera"
                     normalized.append({
-                        "sender": "Pilot" if entry.get("role") == "user" else "Vespera",
+                        "sender": sender,
                         "text": text,
-                        "timestamp": entry.get("created_at", datetime.now().isoformat())
+                        "timestamp": entry.get("created_at") or entry.get("ts") or datetime.now().isoformat()
                     })
         except json.JSONDecodeError:
             print("[-] GeminiNormalizer: Failed to parse JSON.")

@@ -47,6 +47,14 @@ class AntigravityParser(BaseParser):
             if cline_tasks.exists():
                 detected.append(str(cline_tasks))
                 
+            # Check Downloads folder for exported Gemini chat exports (.json / .md)
+            downloads_gemini = Path(os.path.expanduser("~")) / "Downloads" / "Gemini chats"
+            if downloads_gemini.exists():
+                detected.append(str(downloads_gemini))
+            downloads_dir = Path(os.path.expanduser("~")) / "Downloads"
+            if downloads_dir.exists():
+                detected.append(str(downloads_dir))
+
             # Check standard unified ingest drive path
             ingest_path = Path(r"D:\Memory\Unified_Ingest")
             if ingest_path.exists():
