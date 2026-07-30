@@ -117,3 +117,35 @@ class AntigravityNormalizer:
             except json.JSONDecodeError:
                 continue
         return normalized, project_tag
+
+class ClineNormalizer:
+    def parse(self, file_content):
+        """Adapter for Roo-Cline and Cline VS Code extension chat JSON transcripts."""
+        normalized = []
+        project_tag = None
+        try:
+            data = json.loads(file_content)
+            # Support both array of UI messages and api_conversation_history format
+            messages = data if isinstance(data, list) else data.get("messages", [])
+            for msg in messages:
+                if not isinstance(msg, dict):
+                    continue
+                role = msg.get("role") or msg.get("type") or msg.get("say")
+                text = msg.get("content") or msg.get("text")
+                if isinstance(text, list):
+                    # Handle multimodal content blocks
+                    text_parts = [b.get("text", "") for b in text if isinstance(b, dict) and b.get("type") == "text"]
+                    text = "\n".join(text_parts)
+                if not text or not isinstance(text, str):
+                    continue
+                text = text.strip()
+                if len(text) > 10 and not text.startswith("[API Error"):
+                    sender = "Pilot" if role in ["user", "user_feedback"] else "Vespera"
+                    normalized.append({
+                        "sender": sender,
+                        "text": text,
+                        "timestamp": datetime.fromtimestamp(msg.get("ts", 0)/1000).isoformat() if msg.get("ts") else datetime.now().isoformat()
+                    })
+        except Exception as e:
+            print(f"[-] ClineNormalizer: Error parsing Cline log: {e}")
+        return normalized, project_tag

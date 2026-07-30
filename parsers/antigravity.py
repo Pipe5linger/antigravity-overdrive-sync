@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 from parsers.base import BaseParser
 from core import fact_extractor
-from normalizers.adapters import GeminiNormalizer, AntigravityNormalizer
+from normalizers.adapters import GeminiNormalizer, AntigravityNormalizer, ClineNormalizer
 
 LAST_SYNC_FILE = Path(__file__).resolve().parents[1] / "core" / "last_sync.txt"
 
@@ -36,6 +36,16 @@ class AntigravityParser(BaseParser):
             user_brain = Path(os.path.expanduser("~")) / ".gemini" / "antigravity" / "brain"
             if user_brain.exists():
                 detected.append(str(user_brain))
+                
+            # Check Roo-Cline VS Code tasks dir
+            roo_tasks = Path(os.path.expanduser("~")) / "AppData" / "Roaming" / "Code" / "User" / "globalStorage" / "rooveterinaryinc.roo-cline" / "tasks"
+            if roo_tasks.exists():
+                detected.append(str(roo_tasks))
+
+            # Check Cline VS Code tasks dir
+            cline_tasks = Path(os.path.expanduser("~")) / "AppData" / "Roaming" / "Code" / "User" / "globalStorage" / "saoudrizwan.cline" / "tasks"
+            if cline_tasks.exists():
+                detected.append(str(cline_tasks))
                 
             # Check standard unified ingest drive path
             ingest_path = Path(r"D:\Memory\Unified_Ingest")
@@ -87,10 +97,23 @@ class AntigravityParser(BaseParser):
             for item in os.listdir(target_dir):
                 full_path = os.path.join(target_dir, item)
                 
-                # Logic: If directory, look for standard log structure. If file, treat as direct export.
+                # Logic: If directory, check for Antigravity or Cline task log structure. If file, treat as direct export.
                 if os.path.isdir(full_path):
-                    transcript_path = os.path.join(full_path, ".system_generated", "logs", "transcript.jsonl")
-                    adapter = AntigravityNormalizer()
+                    antigravity_log = os.path.join(full_path, ".system_generated", "logs", "transcript.jsonl")
+                    cline_ui_log = os.path.join(full_path, "ui_messages.json")
+                    cline_api_log = os.path.join(full_path, "api_conversation_history.json")
+                    
+                    if os.path.exists(antigravity_log):
+                        transcript_path = antigravity_log
+                        adapter = AntigravityNormalizer()
+                    elif os.path.exists(cline_ui_log):
+                        transcript_path = cline_ui_log
+                        adapter = ClineNormalizer()
+                    elif os.path.exists(cline_api_log):
+                        transcript_path = cline_api_log
+                        adapter = ClineNormalizer()
+                    else:
+                        continue
                 else:
                     transcript_path = full_path
                     adapter = GeminiNormalizer()
