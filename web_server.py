@@ -256,7 +256,7 @@ def run_sync_task():
         memory_injector = GeminiMdInjector()
         evaluator = ProfileEvaluator()
         
-        new_logs = log_parser.fetch_new_logs(force_ingest=True)
+        new_logs = log_parser.fetch_new_logs(force_ingest=False)
         if new_logs:
             synced_s, synced_m = db.import_raw_logs(new_logs)
             add_web_log(f"ETL Ingested: {synced_s} sessions, {synced_m} messages.")

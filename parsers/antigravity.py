@@ -132,8 +132,20 @@ class AntigravityParser(BaseParser):
                         continue
                     
                     print(f"[+] Found session/file: {item}")
-                    with open(transcript_path, 'r', encoding='utf-8') as f:
-                        messages, project_tag = adapter.parse(f.read())
+                    raw_content = None
+                    for enc in ['utf-8', 'cp1252', 'latin-1']:
+                        try:
+                            with open(transcript_path, 'r', encoding=enc) as f:
+                                raw_content = f.read()
+                            break
+                        except UnicodeDecodeError:
+                            continue
+                        except Exception:
+                            break
+                    if raw_content is None:
+                        print(f"[-] Skipping unreadable file (not valid text): {item}")
+                        continue
+                    messages, project_tag = adapter.parse(raw_content)
                     
                     if messages:
                         extracted_payloads.append({

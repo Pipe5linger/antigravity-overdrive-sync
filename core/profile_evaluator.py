@@ -11,7 +11,7 @@ from core.utils import TokenBucket
 class ProfileEvaluator:
     def __init__(self, api_key=None):
         self.api_key = api_key or os.getenv("GEMINI_API_KEY")
-        self.limiter = TokenBucket(capacity=5.0, fill_rate=0.25)
+        self.limiter = TokenBucket(capacity=5.0, fill_rate=5.0)
 
     def _is_ollama_running(self, endpoint):
         try:

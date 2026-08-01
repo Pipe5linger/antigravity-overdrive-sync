@@ -8,6 +8,7 @@ import urllib.error
 import requests
 from pathlib import Path
 from datetime import datetime
+from typing import List, Optional, Union, Dict, Any
 from injectors.base import BaseInjector
 
 try:

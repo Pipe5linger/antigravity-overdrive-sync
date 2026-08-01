@@ -6,6 +6,7 @@ import os
 import requests
 import urllib.request
 import urllib.error
+from typing import List, Dict, Any
 from core.database import ULMDatabase
 
 class MemoryConsolidator:

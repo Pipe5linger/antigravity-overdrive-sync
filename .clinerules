@@ -14,14 +14,14 @@ Identity:
 
 ## 2. ACTIVE CONTEXT & TOP RULES (Workspace: antigravity-overdrive-sync)
 ### Key Behavioral Telemetry (Top 3)
-  - [MILESTONE] comfyui-mcp-server-setup: Set up a Python-based MCP server to bridge local AI coding agents with ComfyUI, enabling image generation via local GPU. (Conf: 1.0, Freq: 22)
-  - [HABIT] detailed-documentation: Practiced detailed documentation and provided clear instructions for setup, testing, and verification in `README.md`. (Conf: 1.0, Freq: 14)
-  - [VISION] local-memory-engine: Developed a comprehensive local memory engine with features like memory consolidation, context-aware tagging, and hierarchical memory organization to enhance developer productivity. (Conf: 1.0, Freq: 9)
+  - [MILESTONE] comfyui-mcp-server-setup: Built and wired up a custom ComfyUI MCP (Model Context Protocol) server at `D:/AI/Projects/comfyui-mcp-server/`. (Conf: 1.0, Freq: 25)
+  - [MILESTONE] memory-contradiction-engine: Created `core/consolidator.py` which runs a transaction-safe database resolution loop via LLM to merge redundant facts and discard contradictions. (Conf: 1.0, Freq: 18)
+  - [MILESTONE] context-aware-tagging: Upgraded the SQLite database structure (Schema version 4) to include `project_tag` columns on the `sessions`, `facts`, and `developer_profile` tables. (Conf: 1.0, Freq: 18)
 
 ### Active Semantic Facts (Top 3)
-  - [TECHNICAL] The project repository is located at `D:/AI/Projects/antigravity-overdrive-sync`. (Conf: 1.0)
-  - [TECHNICAL] The application uses an SQLite database with WAL (Write-Ahead Log) mode for efficient data storage and retrieval, replacing a monolithic YAML file approach. (Conf: 1.0)
-  - [TECHNICAL] Key scripts are located in various directories, including `D:/AI/Antigravity outputs/`, `C:/Users/boben/.gemini/antigravity/scratch/`, and within the project directory. (Conf: 1.0)
+  - [TECHNICAL] The project repository is located at `Pipe5linger/antigravity-overdrive-sync` on GitHub. (Conf: 1.0)
+  - [TECHNICAL] The project is tracked in a GitHub repository located at `Pipe5linger/antigravity-overdrive-sync`. (Conf: 1.0)
+  - [TECHNICAL] Confirmed using Roo-Cline version 3.54.0 and working on the ComfyUI MCP server project in Python. (Conf: 1.0)
 
 ## 3. SYSTEM MEMORY REFERENCES
 - Master Protocol Anchor: `d:\GEMINI.md`
