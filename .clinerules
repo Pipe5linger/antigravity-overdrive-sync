@@ -14,9 +14,9 @@ Identity:
 
 ## 2. ACTIVE CONTEXT & TOP RULES (Workspace: antigravity-overdrive-sync)
 ### Key Behavioral Telemetry (Top 3)
-  - [MILESTONE] comfyui-mcp-server-setup: Built and wired up a custom ComfyUI MCP (Model Context Protocol) server at `D:/AI/Projects/comfyui-mcp-server/`. (Conf: 1.0, Freq: 25)
-  - [MILESTONE] memory-contradiction-engine: Created `core/consolidator.py` which runs a transaction-safe database resolution loop via LLM to merge redundant facts and discard contradictions. (Conf: 1.0, Freq: 18)
-  - [MILESTONE] context-aware-tagging: Upgraded the SQLite database structure (Schema version 4) to include `project_tag` columns on the `sessions`, `facts`, and `developer_profile` tables. (Conf: 1.0, Freq: 18)
+  - [MILESTONE] comfyui-mcp-server-setup: Built and configured a custom ComfyUI Model Context Protocol (MCP) server at D:/AI/Projects/comfyui-mcp-server/. (Conf: 1.0, Freq: 40)
+  - [VISION] local-memory-engine: Envisions building a local AI memory engine with SQLite to track developer profiles and chat histories, emphasizing privacy and control over cloud-based solutions. (Conf: 1.0, Freq: 22)
+  - [MILESTONE] tui-dashboard-live: Implemented interactive console interface with SQLite query hooks, logs, and sync orchestration in `dashboard.py`. (Conf: 1.0, Freq: 20)
 
 ### Active Semantic Facts (Top 3)
   - [TECHNICAL] The project repository is located at `Pipe5linger/antigravity-overdrive-sync` on GitHub. (Conf: 1.0)

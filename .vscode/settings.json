@@ -1,0 +1,13 @@
+{
+    "workbench.tips.enabled": false,
+    "breadcrumbs.showEditorType": true,
+    "workbench.editor.alwaysShowEditorActions": false,
+    "workbench.editor.pinnedTabSizing": "compact",
+    "workbench.editor.revealIfOpen": true,
+    "workbench.editor.splitInGroupLayout": "vertical",
+    "workbench.editor.splitOnDragAndDrop": true,
+    "workbench.editor.enablePreview": false,
+    "workbench.activityBar.compact": true,
+    "workbench.settings.alwaysShowAdvancedSettings": true,
+    "workbench.colorTheme": "Fivefold - Dark"
+}

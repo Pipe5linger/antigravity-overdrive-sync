@@ -14,14 +14,14 @@ Identity:
 
 ## 2. ACTIVE CONTEXT & TOP RULES (Workspace: zit_training)
 ### Key Behavioral Telemetry (Top 3)
+  - [MILESTONE] core-apps-installation: Installed multiple core applications using winget, including Notepad++, OBS, HWMonitor, CrystalDiskInfo, Everything, PowerToys, VLC, and updated VS Code, Windows Terminal, and VC Redist. (Conf: 1.0, Freq: 16)
   - [INQUIRY] web-access-capabilities: Pilot inquired about the web access capabilities of agentic models across different extensions. (Conf: 1.0, Freq: 13)
   - [HABIT] structured-documentation: Vespera consistently uses structured documentation, breaking down the blueprint into clear sections and providing detailed descriptions for each component. (Conf: 1.0, Freq: 11)
-  - [MILESTONE] database-schema-design: Completed the database schema design for the highly subdivided prompt generator. (Conf: 1.0, Freq: 11)
 
 ### Active Semantic Facts (Top 3)
+  - [TECHNICAL] The current working directory is D:/AI/Projects/antigravity-overdrive-sync. (Conf: 1.0)
   - [TECHNICAL] `E:\_Sanctuary_Backups\` contains multiple subdirectories and files as outlined in the reorganization plan. (Conf: 1.0)
   - [TECHNICAL] The developer's scratch space is located at `C:\Users\boben\.gemini\antigravity\scratch`, which is a specific directory path used for project development. (Conf: 1.0)
-  - [TECHNICAL] The VR&E Counselor Prep Package is located in 'd:\Dev\Projects\vre-appointment-prep\'. (Conf: 1.0)
 
 ## 3. SYSTEM MEMORY REFERENCES
 - Master Protocol Anchor: `d:\GEMINI.md`

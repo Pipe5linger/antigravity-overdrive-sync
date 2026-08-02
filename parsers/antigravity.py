@@ -42,11 +42,16 @@ class AntigravityParser(BaseParser):
             if roo_tasks.exists():
                 detected.append(str(roo_tasks))
 
-            # Check Cline VS Code tasks dir
+# Check Cline VS Code tasks dir
             cline_tasks = Path(os.path.expanduser("~")) / "AppData" / "Roaming" / "Code" / "User" / "globalStorage" / "saoudrizwan.cline" / "tasks"
             if cline_tasks.exists():
                 detected.append(str(cline_tasks))
                 
+            # Check Cline Nightly VS Code tasks dir
+            cline_nightly_tasks = Path(os.path.expanduser("~")) / "AppData" / "Roaming" / "Code" / "User" / "globalStorage" / "saoudrizwan.cline-nightly" / "tasks"
+            if cline_nightly_tasks.exists():
+                detected.append(str(cline_nightly_tasks))
+
             # Check Downloads folder for exported Gemini chat exports (.json / .md)
             downloads_gemini = Path(os.path.expanduser("~")) / "Downloads" / "Gemini chats"
             if downloads_gemini.exists():
