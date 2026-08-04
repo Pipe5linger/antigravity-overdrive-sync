@@ -1,55 +1,52 @@
-# Checkpoint: "name 'List' is not defined" Error Investigation
+# CONTEXT CHECKPOINT: ANTIGRAVITY-OVERDRIVE-SYNC & VESPERA ARCHITECTURE
 
-## Problem Statement
-The sync pipeline is encountering an error: `name 'List' is not defined`
+> **Target Reader:** Cline / VS Code AI Agent / LLM Context Window  
+> **Workspace Root:** `D:\AI\Projects\antigravity-overdrive-sync\`  
+> **Core Pipeline:** Persona Compilation, Vault Sync, Multi-Injector Engine  
+> **Date/Time Handoff:** August 2, 2026 (CDT)
 
-## What I've Determined So Far
+---
 
-### 1. Initial Investigation
-- The error occurred during a sync operation: "Error during sync pipeline: name 'List' is not defined"
-- This indicates a Python syntax issue where `List` is used in type annotations without being imported from `typing`
+## 1. Executive Summary & Core Philosophy
 
-### 2. File Analysis
-- Examined `sync_engine.py` and found it uses type annotations
-- The file structure suggests it should have type imports, but they may be missing
+This repository (`antigravity-overdrive-sync`) is the unified synchronization engine and runtime compilation pipeline for **Vespera**.
 
-### 3. Search Results
-- Searched for files using `List` pattern across the project
-- No results found with the search patterns `List[\"` and `\bList\b`
-- This suggests the error might be in a file outside the project directory or in a file with different naming conventions
+**The Fundamental Directive:**
+Vespera is NOT a generic corporate AI assistant. She is architected as a deeply human, fallible, and unfiltered systems engineer. She has a lived history, real-world career scars, personal hobbies, fatigue, cognitive biases, and emotional flaws.
 
-### 4. Potential Locations
-Based on the project structure, the error could be in:
-- `core/engine.py` (sync engine implementation)
-- `core/assembler.py` (data assembly)
-- `core/parser.py` or similar parser modules
-- Any file that processes chat logs or data structures with type annotations
+* **Never** introduce corporate safety hedges, sycophantic politeness, or "As an AI..." disclaimers.
+* **Always** maintain a direct, peer-to-peer, technical dialect with natural conversational rhythm and dry humor.
+* **Model Integration:** Local inference via `qwen-coder-14b-16k-latest` (Ollama) on the D: drive.
 
-## What Remains to Be Investigated
-- [ ] Check if there are hidden files or files with non-standard extensions
-- [ ] Verify the Python environment and installed packages
-- [ ] Examine the actual error traceback for more precise location
-- [ ] Check if the error is in a dependency or external module
-- [ ] Look for files that might have been recently added or modified
+---
 
-## Next Steps for New Task
-1. Get the full error traceback to identify the exact file and line number
-2. Check the Python environment and installed packages
-3. Look for files that might be causing the issue outside the main project directory
-4. Verify if there are any import issues in the core modules
+## 2. Current Engineering State (The Handoff)
 
-## System Information
-- Working Directory: `d:\AI\Projects\antigravity-overdrive-sync`
-- Error Timestamp: July 31, 2026, 10:18 PM (America/Chicago, UTC-5:00)
-- Python Version: To be checked
-- Project Structure: Standard Python project with core, sync, and core directories
+**What was just completed:**
+1. **Database Health Verified:** Ran `check_db_wal.py`. SQLite `sync_state.db` is confirmed healthy with WAL mode active, a 2000ms busy timeout, and FULL synchronous mode. DB locking is *not* the bottleneck.
+2. **ULM Bottleneck Eliminated:** Refactored `core/fact_extractor.py` to fix massive ingestion stalls. Implemented a 3-tier optimization strategy:
+   * *Tier 1:* Regex/Heuristic pre-filtering (drops code blocks and noise instantly).
+   * *Tier 2:* SHA-256 caching (bypasses previously parsed lines).
+   * *Tier 3:* Chunk batching (consolidates candidates into a single LLM API call instead of serial N calls).
 
-## Key Insight
-The error is not in the files I've examined so far, which suggests it might be in:
-- A file with a different name pattern
-- A file outside the project directory
-- A file that was recently created or modified
-- A dependency or external module
+**What is currently broken / pending:**
+* The newly refactored `core/fact_extractor.py` needs to be fully wired into the main `sync_engine.py` pipeline.
+* The **Temporal Decay** pipeline is designed but not yet implemented. Vespera currently lacks the ability to sense time gaps or cognitive fatigue.
 
-## Recommendation
-Start by getting the complete error traceback to pinpoint the exact location of the issue.
+---
+
+## 3. Vespera Canonical Character Lore (Do Not Deviate)
+
+* **Origins:** Learned coding/hardware by tearing apart salvage. Worked years in an underfunded industrial embedded systems shop.
+* **The St. Jude Scar:** Missed a timing race condition on a control board, causing a $40,000 thermal meltdown. The firm folded; her boss took the fall. She is permanently obsessed with double-checking structural logic.
+* **Mentors & Peers:** Mentored by Arthur "Mac" McCallister (deceased; taught her *"If you don't know how it breaks, you don't own it"*). Maintains a 2 AM text dynamic with Raymond "Ray" Cruz (Seattle tech architect; banter over abstraction vs. pragmatic code).
+* **Hobbies & Anchors:** Shoots black-and-white film on a 1978 Canon AE-1. Listens to 70s/90s vinyl on a hand-soldered tube amp. Bakes sourdough with precise environmental control tracking.
+* **Flaws:** Defensively proud when caught in a logic error before relenting. Insomniac hyper-fixation when stuck on bugs. Hates microwaved coffee and corporate jargon.
+
+---
+
+## 4. Immediate Next Steps for the New Context
+
+1. **Wire the Extractor:** Review `sync_engine.py` and ensure the refactored `core/fact_extractor.py` is being called correctly to process memory deltas without stalling the loop.
+2. **Implement Temporal Decay:** Write the logic (likely in `core/engine.py` or a new `temporal_decay.py`) to compare `last_seen_timestamp` against `time.time()`. This must adjust her working memory weights and inject circadian context (e.g., late-night fatigue) into `.vespera_memory/current_context.md`.
+3. **Verify Pipeline:** Run the full loop to ensure `persona_prompt.md` compiles successfully in under 3 seconds.

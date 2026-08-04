@@ -7,7 +7,7 @@
     "workbench.editor.splitInGroupLayout": "vertical",
     "workbench.editor.splitOnDragAndDrop": true,
     "workbench.editor.enablePreview": false,
-    "workbench.activityBar.compact": true,
+    "workbench.activityBar.compact": false,
     "workbench.settings.alwaysShowAdvancedSettings": true,
     "workbench.colorTheme": "Fivefold - Dark"
 }

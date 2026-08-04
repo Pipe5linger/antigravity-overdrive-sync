@@ -232,7 +232,7 @@ def set_preference(payload: PreferencePayload):
 
 @app.get("/api/ollama/models")
 def get_ollama_models():
-    endpoint = db.get_preference("ollama_endpoint", "http://localhost:11434")
+    endpoint = db.get_preference("ollama_endpoint", "http://localhost:11434") or "http://localhost:11434"
     try:
         url = f"{endpoint.rstrip('/')}/api/tags"
         res = requests.get(url, timeout=5)
