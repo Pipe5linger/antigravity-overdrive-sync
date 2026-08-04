@@ -263,10 +263,13 @@ def run_sync_task():
             
         unprofiled = db.get_unprofiled_sessions()
         if unprofiled:
-            add_web_log(f"Evaluating {len(unprofiled)} unprofiled sessions in background worker thread...")
+            # Cap evaluation to a small batch per sync cycle to prevent UI/Thread stall
+            batch_limit = 5
+            to_process = unprofiled[:batch_limit]
+            add_web_log(f"Evaluating {len(to_process)} of {len(unprofiled)} unprofiled sessions in background worker thread...")
             count = 0
-            total = len(unprofiled)
-            for s_id in unprofiled:
+            total = len(to_process)
+            for s_id in to_process:
                 count += 1
                 if evaluator.evaluate_session(db, s_id):
                     db.mark_session_profiled(s_id)
@@ -279,7 +282,11 @@ def run_sync_task():
         memory_injector.inject(db, dry_run=False)
         add_web_log("[+] ULM Sync & Reinjection completed successfully!")
     except Exception as e:
+        import traceback
+        tb = traceback.format_exc()
         add_web_log(f"[-] ULM Sync Error: {e}")
+        for line in tb.splitlines()[-4:]:
+            add_web_log(f"    TRACE: {line.strip()}")
 
 import threading
 _sync_thread_running = False

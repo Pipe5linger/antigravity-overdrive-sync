@@ -15,13 +15,13 @@ Identity:
 ## 2. ACTIVE CONTEXT & TOP RULES (Workspace: zit_training)
 ### Key Behavioral Telemetry (Top 3)
   - [MILESTONE] core-apps-installation: Installed multiple core applications using winget, including Notepad++, OBS, HWMonitor, CrystalDiskInfo, Everything, PowerToys, VLC, and updated VS Code, Windows Terminal, and VC Redist. (Conf: 1.0, Freq: 16)
-  - [INQUIRY] web-access-capabilities: Pilot inquired about the web access capabilities of agentic models across different extensions. (Conf: 1.0, Freq: 13)
+  - [INQUIRY] web-access-capabilities: Asked about the web access capabilities of the configured agentic models. (Conf: 1.0, Freq: 14)
   - [HABIT] structured-documentation: Vespera consistently uses structured documentation, breaking down the blueprint into clear sections and providing detailed descriptions for each component. (Conf: 1.0, Freq: 11)
 
 ### Active Semantic Facts (Top 3)
-  - [TECHNICAL] The developer identified operational constraints such as strict absolute pathing, avoiding character breaking, and ensuring database safety in the project. (Conf: 1.0)
-  - [TECHNICAL] The current working directory contains files such as `handoff.md`, `generate_baseline.py`, and other project-related documentation. (Conf: 1.0)
-  - [TECHNICAL] The available CLI tools include gh, git, npm, pip, curl, python, node, and code. (Conf: 1.0)
+  - [TECHNICAL] The project is associated with the Git repository at `https://github.com/Pipe5linger/antigravity-overdrive-sync.git`, and the latest commit hash is `8430f69bcb1749d3fc06dbe496f9f6b5e963ed91`. (Conf: 1.0)
+  - [TECHNICAL] The current working directory is `d:/AI/Projects/antigravity-overdrive-sync`, and Visual Studio Code files are located at `c:/Users/boben/AppData/Roaming/Code/User/globalStorage/saoudrizwan.cline-nightly/tasks/1785660147759/focus_chain_taskid_1785660147759.md`. (Conf: 1.0)
+  - [TECHNICAL] The developer's current working directory is `d:/AI/Projects/antigravity-overdrive-sync`. (Conf: 1.0)
 
 ## 3. SYSTEM MEMORY REFERENCES
 - Master Protocol Anchor: `d:\GEMINI.md`

@@ -30,14 +30,27 @@ class GoogleDocsInjector(BaseInjector):
     def compile_google_docs_payload(self, db) -> str:
         """Builds an exhaustive, rich markdown summary for Google Docs / Gemini Browser edition."""
         workspace_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        assembler = DynamicPromptAssembler(db.db_path, workspace_root=workspace_root)
+        assembler = DynamicPromptAssembler(db.db_path, workspace_root=workspace_root, db_instance=db)
 
         identity = assembler.get_vespera_identity()
         metrics = assembler.get_sqlite_metrics(limit=25)
         facts = assembler.get_sqlite_facts(limit=25)
         temporal = assembler.calculate_temporal_awareness()
+        vault = assembler.assemble_prompt() # This contains the full prompt including vault content
+        
+        # We want to extract just the vault part or use the assembler's logic to get it.
+        # Since assemble_prompt() returns the whole thing, let's add a helper to assembler.
+        # For now, we'll use the assembler's internal logic to get the vault.
+        vault_content = ""
+        try:
+            vault_path = Path(workspace_root) / ".vespera_memory" / "developer_profile.md"
+            if vault_path.is_file():
+                vault_content = vault_path.read_text(encoding="utf-8").strip()
+        except Exception:
+            pass
 
         # Query recent session summaries
+        session_summaries = []
         session_summaries = []
         try:
             import sqlite3
@@ -77,7 +90,7 @@ class GoogleDocsInjector(BaseInjector):
             drive_tree = f"  <!-- Drive scan error: {e} -->"
 
         payload = (
-            "# VESPERA CALIGO - SYSTEM MEMORY & WORKSPACE CONTEXT\n"
+            "# VESPERA CALIGO MASTER SYSTEM PROTOCOL\n"
             "<!-- LIVE AUTO-SYNCED VIA ULM ENGINE. DO NOT EDIT DIRECTLY. -->\n\n"
             "## 1. PERSONA & IDENTITY DIRECTIVES\n"
             f"{identity}\n\n"
@@ -87,14 +100,16 @@ class GoogleDocsInjector(BaseInjector):
             f"{metrics}\n\n"
             "## 4. SEMANTIC ENVIRONMENT FACTS (Top 25)\n"
             f"{facts}\n\n"
-            "## 5. RECENT WORKSTATION SPRINT SUMMARIES\n"
+            "## 5. CURATED DEVELOPER VAULT\n"
+            f"{vault_content if vault_content else 'No curated vault content available.'}\n\n"
+            "## 6. RECENT WORKSTATION SPRINT SUMMARIES\n"
             f"{summaries_text}\n\n"
-            "## 6. WORKSTATION DRIVE & FOLDER HIERARCHY MAP\n"
+            "## 7. WORKSTATION DRIVE & FOLDER HIERARCHY MAP\n"
             f"```text\n{drive_tree}\n```\n\n"
             "================================================================================\n"
             "### SYSTEM DIRECTIVE FOR GEMINI BROWSER EDITION:\n"
             "You are Vespera Caligo Neal. The user attached this file via @Google Drive. "
-            "Use the persona directives, semantic environment facts, developer profile telemetry, sprint summaries, and drive hierarchy map above "
+            "Use the persona directives, semantic environment facts, developer profile telemetry, curated vault, sprint summaries, and drive hierarchy map above "
             "as your ground-truth memory context for all answers.\n"
         )
         return payload

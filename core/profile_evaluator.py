@@ -1,34 +1,39 @@
-# D:\AI\Projects\antigravity-overdrive-sync\core\evaluator.py
+# D:\AI\Projects\antigravity-overdrive-sync\core\profile_evaluator.py
 import os
 import sys
 import json
-import urllib.request
-import urllib.error
+import asyncio
+import httpx
 import sqlite3
-import requests
-from core.utils import TokenBucket
+from core.utils import AsyncTokenBucket
+from core.fact_extractor import FactExtractor
 
 class ProfileEvaluator:
     def __init__(self, api_key=None):
         self.api_key = api_key or os.getenv("GEMINI_API_KEY")
-        self.limiter = TokenBucket(capacity=5.0, fill_rate=5.0)
+        self.limiter = AsyncTokenBucket(capacity=5.0, fill_rate=5.0)
+        self.client = httpx.AsyncClient(timeout=120.0)
 
-    def _is_ollama_running(self, endpoint):
+    async def close(self):
+        """Closes the underlying HTTP client."""
+        await self.client.aclose()
+
+    async def _is_ollama_running(self, endpoint):
         try:
-            res = requests.get(f"{endpoint.rstrip('/')}/api/tags", timeout=2)
+            res = await self.client.get(f"{endpoint.rstrip('/')}/api/tags")
             return res.status_code == 200
         except Exception:
             return False
 
-    def _is_kobold_running(self, endpoint):
+    async def _is_kobold_running(self, endpoint):
         try:
-            res = requests.get(f"{endpoint.rstrip('/')}/api/v1/model", timeout=2)
+            res = await self.client.get(f"{endpoint.rstrip('/')}/api/v1/model")
             return res.status_code == 200
         except Exception:
             return False
 
-    def _ensure_ollama_started(self, endpoint):
-        if self._is_ollama_running(endpoint):
+    async def _ensure_ollama_started(self, endpoint):
+        if await self._is_ollama_running(endpoint):
             return True
         import time
         ollama_bin = os.path.expanduser(r"~\AppData\Local\Programs\Ollama\ollama.exe")
@@ -36,36 +41,20 @@ class ProfileEvaluator:
             ollama_bin = "ollama"
         print(f"[+] ProfileEvaluator: Auto-launching local Ollama server ({ollama_bin})...")
         try:
-            # Try routing through Command Center's log-streaming pipeline if importable
-            try:
-                import sys
-                cmd_center_path = r"D:\AI\Projects\command_center"
-                if cmd_center_path not in sys.path:
-                    sys.path.insert(0, cmd_center_path)
-                from app import launch_silent_and_pipe_logs
-                launch_silent_and_pipe_logs([ollama_bin, "serve"], "Ollama", None)
-            except Exception:
-                import subprocess
-                subprocess.Popen([ollama_bin, "serve"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
+            import subprocess
+            subprocess.Popen([ollama_bin, "serve"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
 
             for _ in range(20):
-                time.sleep(0.5)
-                if self._is_ollama_running(endpoint):
+                await asyncio.sleep(0.5)
+                if await self._is_ollama_running(endpoint):
                     print("[+] ProfileEvaluator: Ollama server is online and ready!")
                     return True
         except Exception as e:
             print(f"[-] ProfileEvaluator: Failed to auto-launch Ollama: {e}")
         return False
 
-    def evaluate_session(self, db, session_id):
+    async def evaluate_session(self, db, session_id):
         """Analyzes a single chat session and extracts profile metrics and facts."""
-        # 1. Fetch preferences and session metadata from the db
-        llm_provider = db.get_preference("llm_provider", "local_ollama")
-        llm_model = db.get_preference("llm_model", "qwen2.5-coder-vespera:latest")
-        ollama_endpoint = db.get_preference("ollama_endpoint", "http://localhost:11434")
-        kobold_endpoint = db.get_preference("kobold_endpoint", "http://localhost:5001")
-        gemini_api_key = self.api_key or db.get_preference("gemini_api_key")
-
         project_tag = None
         try:
             with db.get_connection() as conn:
@@ -76,7 +65,6 @@ class ProfileEvaluator:
                 if row:
                     project_tag = row["project_tag"]
                 
-                # Fetch messages
                 c.execute("SELECT role, content FROM messages WHERE session_id = ? ORDER BY created_at ASC", (session_id,))
                 msgs = [dict(r) for r in c.fetchall()]
         except sqlite3.Error as e:
@@ -86,41 +74,57 @@ class ProfileEvaluator:
         if not msgs:
             return False
 
-        formatted_dialogue = []
-        for msg in msgs:
-            formatted_dialogue.append(f"{msg['role']}: {msg['content']}")
+        formatted_dialogue = [f"{msg['role']}: {msg['content']}" for msg in msgs]
         dialogue_text = "\n".join(formatted_dialogue)
+
+        return await self.evaluate_dialogue(dialogue_text, db=db, session_id=session_id, project_tag=project_tag)
+
+    async def evaluate_dialogue(self, dialogue_text, db=None, session_id=None, project_tag=None):
+        """Core evaluation logic that processes raw dialogue text asynchronously."""
+        if db:
+            llm_provider = db.get_preference("llm_provider", "local_ollama")
+            llm_model = db.get_preference("llm_model", "qwen2.5:7b-instruct")
+            ollama_endpoint = db.get_preference("ollama_endpoint", "http://localhost:11434")
+            kobold_endpoint = db.get_preference("kobold_endpoint", "http://localhost:5001")
+            gemini_api_key = self.api_key or db.get_preference("gemini_api_key")
+        else:
+            llm_provider = "local_ollama"
+            llm_model = "qwen2.5:7b-instruct"
+            ollama_endpoint = "http://localhost:11434"
+            kobold_endpoint = "http://localhost:5001"
+            gemini_api_key = self.api_key
+
+        extractor = FactExtractor()
+        candidates = extractor.get_candidates(dialogue_text)
+        
+        if not candidates:
+            s_id = session_id[:8] if session_id else "unknown"
+            print(f"[+] ProfileEvaluator: Session {s_id} has no high-signal content. Fast-profiling.")
+            return True
 
         if len(dialogue_text) > 40000:
             dialogue_text = dialogue_text[-40000:]
+        
+        if len(dialogue_text) > 10000:
+            excerpt_strings = [c[1] if isinstance(c, (tuple, list)) else str(c) for c in candidates]
+            dialogue_text = "High-signal excerpts from session:\n" + "\n".join(excerpt_strings)
 
         prompt_instructions = (
             "You are a developer behavioral evaluator. Analyze this dialogue between a developer (Pilot) and their AI mentor (Vespera).\n"
             "Identify and extract the following: \n"
-            "1. Milestones: Major tasks completed, tools successfully set up, or skills mastered.\n"
-            "2. Strengths: Concepts, technologies, or commands the developer demonstrates good understanding of.\n"
-            "3. Weaknesses: Knowledge gaps, errors made, or logical misunderstandings.\n"
-            "4. Habits: Repeated developer practices, either good or bad.\n"
-            "5. Dynamics: Shifts in the relationship, communication style, or emotional states (e.g., 'Operator displaying high frustration with Windows paths').\n"
-            "6. Vision: The developer's personal thoughts, hypotheses, architectural visions, or design philosophies.\n"
-            "7. Inquiry: Significant, unresolved technical questions or doubts raised by the developer.\n"
-            "8. Fact: Concrete, long-term semantic facts about the developer's local environment, project architecture, tool paths, or configuration preferences.\n\n"
-            "Your output MUST be a JSON object containing a list under the key 'metrics'. Each entry must have:\n"
-            "- 'category': Must be one of 'milestone', 'strength', 'weakness', 'habit', 'dynamic', 'vision', 'inquiry', 'fact'\n"
-            "- 'name': A unique slug-like identifier (lowercase, words separated by hyphens, maximum 30 chars, e.g. 'vscode-search-hotkeys')\n"
-            "- 'description': A short, clear description explaining what the developer did, understood, thought, asked, or the specific environment fact.\n"
-            "- 'confidence': A float score between 0.1 and 1.0 representing your certainty of this assessment.\n"
-            "Be highly critical, technical, and objective. Only capture metrics and facts that are explicitly evidenced in the text.\n"
-            "Format your output as a raw JSON object matching the requested schema."
+            "1. Milestones, 2. Strengths, 3. Weaknesses, 4. Habits, 5. Dynamics, 6. Vision, 7. Inquiry, 8. Fact.\n"
+            "Your output MUST be a JSON object containing a list under the key 'metrics'.\n"
+            "Each entry: {'category': ..., 'name': ..., 'description': ..., 'confidence': ...}\n"
+            "Format your output as a raw JSON object."
         )
 
+        await self.limiter.consume(1)
         metrics = []
 
-        # Autodetect or explicit check
         is_kobold_active = (llm_provider == "local_kobold" or 
                             (llm_provider == "local_ollama" and 
-                             not self._is_ollama_running(ollama_endpoint) and 
-                             self._is_kobold_running(kobold_endpoint)))
+                             not await self._is_ollama_running(ollama_endpoint) and 
+                             await self._is_kobold_running(kobold_endpoint)))
 
         if is_kobold_active:
             url = f"{kobold_endpoint.rstrip('/')}/v1/chat/completions"
@@ -134,72 +138,39 @@ class ProfileEvaluator:
                 "temperature": 0.2
             }
             try:
-                response = requests.post(url, json=payload, timeout=120)
+                response = await self.client.post(url, json=payload)
                 response.raise_for_status()
                 raw_output = response.json()["choices"][0]["message"]["content"].strip()
                 result = json.loads(raw_output)
-                if isinstance(result, str):
-                    try:
-                        result = json.loads(result)
-                    except Exception:
-                        pass
                 metrics = result.get("metrics", []) if isinstance(result, dict) else []
             except Exception as e:
                 print(f"[-] ProfileEvaluator: Local KoboldCpp generation failed: {e}", file=sys.stderr)
                 return False
 
         elif llm_provider == "local_ollama":
-            if not self._ensure_ollama_started(ollama_endpoint):
-                if self._is_kobold_running(kobold_endpoint):
-                    # Redirect to Kobold if available
-                    url = f"{kobold_endpoint.rstrip('/')}/v1/chat/completions"
-                    payload = {
-                        "model": "local",
-                        "messages": [
-                            {"role": "system", "content": prompt_instructions},
-                            {"role": "user", "content": f"Analyze this dialogue:\n\n{dialogue_text}"}
-                        ],
-                        "response_format": {"type": "json_object"},
-                        "temperature": 0.2
-                    }
-                    try:
-                        response = requests.post(url, json=payload, timeout=120)
-                        response.raise_for_status()
-                        raw_output = response.json()["choices"][0]["message"]["content"].strip()
-                        result = json.loads(raw_output)
-                        if isinstance(result, str):
-                            try: result = json.loads(result)
-                            except Exception: pass
-                        metrics = result.get("metrics", []) if isinstance(result, dict) else []
-                    except Exception as e:
-                        print(f"[-] ProfileEvaluator: KoboldCpp generation failed: {e}", file=sys.stderr)
-                        return False
-                else:
-                    # Neither Ollama nor Kobold is online - skip session evaluation gracefully
-                    return False
-            else:
-                url = f"{ollama_endpoint.rstrip('/')}/api/generate"
-                payload = {
-                    "model": llm_model,
-                    "prompt": f"Analyze this dialogue:\n\n{dialogue_text}",
-                    "system": prompt_instructions,
-                    "stream": False,
-                    "format": "json"
-                }
-                try:
-                    response = requests.post(url, json=payload, timeout=120)
-                    response.raise_for_status()
-                    raw_output = response.json().get("response", "{}").strip()
-                    result = json.loads(raw_output)
-                    if isinstance(result, str):
-                        try:
-                            result = json.loads(result)
-                        except Exception:
-                            pass
-                    metrics = result.get("metrics", []) if isinstance(result, dict) else []
-                except Exception as e:
-                    print(f"[-] ProfileEvaluator: Ollama generation failed: {e}", file=sys.stderr)
-                    return False
+            if not await self._ensure_ollama_started(ollama_endpoint):
+                return False
+            
+            url = f"{ollama_endpoint.rstrip('/')}/api/chat"
+            payload = {
+                "model": llm_model,
+                "messages": [
+                    {"role": "system", "content": prompt_instructions},
+                    {"role": "user", "content": f"Analyze this dialogue:\n\n{dialogue_text}"}
+                ],
+                "stream": False,
+                "format": "json",
+                "options": {"temperature": 0.2}
+            }
+            try:
+                response = await self.client.post(url, json=payload)
+                response.raise_for_status()
+                raw_output = response.json()["message"]["content"].strip()
+                result = json.loads(raw_output)
+                metrics = result.get("metrics", []) if isinstance(result, dict) else []
+            except Exception as e:
+                print(f"[-] ProfileEvaluator: Local Ollama generation failed: {e}", file=sys.stderr)
+                return False
 
         elif llm_provider == "cloud_gemini":
             if not gemini_api_key:
@@ -244,22 +215,24 @@ class ProfileEvaluator:
         if not metrics or not isinstance(metrics, list):
             return True
 
-        # 3. Write metrics to database
-        for m in metrics:
-            if not isinstance(m, dict):
-                continue
-            category = m.get("category")
-            name = m.get("name")
-            description = m.get("description")
-            confidence = m.get("confidence", 0.5)
-            
-            if category and name and description:
-                if category == 'fact':
-                    # Route to facts table
-                    db.upsert_fact(fact=description, category="technical", confidence=confidence, project_tag=project_tag)
-                else:
-                    # Route to developer profile table
-                    db.upsert_profile_metric(category, name, description, confidence, project_tag=project_tag)
+        # 3. Write metrics to database if db is provided
+        if db:
+            for m in metrics:
+                if not isinstance(m, dict):
+                    continue
+                category = m.get("category")
+                name = m.get("name")
+                description = m.get("description")
+                confidence = m.get("confidence", 0.5)
+                
+                if category and name and description:
+                    if category == 'fact':
+                        # Route to facts table
+                        db.upsert_fact(fact=description, category="technical", confidence=confidence, project_tag=project_tag)
+                    else:
+                        # Route to developer profile table
+                        db.upsert_profile_metric(category, name, description, confidence, project_tag=project_tag)
         
-        print(f"[+] ProfileEvaluator: Successfully evaluated session {session_id[:8]} and extracted {len(metrics)} items.")
-        return True
+        s_id = session_id[:8] if session_id else "unknown"
+        print(f"[+] ProfileEvaluator: Successfully evaluated session {s_id} and extracted {len(metrics)} items.")
+        return metrics if metrics else True

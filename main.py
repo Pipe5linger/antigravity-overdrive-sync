@@ -2,6 +2,7 @@ import sys
 import os
 import argparse
 import sqlite3
+import asyncio
 from pathlib import Path
 
 # Enforce UTF-8 terminal piping on Windows
@@ -115,58 +116,79 @@ def main():
         daemon.start()
 
     elif args.command == "sync":
-        print(f"\n[*] ULM Pipeline Initialized | Parser: {args.parser.upper()} | Injector: {args.injector.upper()}")
-        
-        parser_class = PARSERS[args.parser]
-        log_parser = parser_class(llm_model=args.llm_model, vector_model=args.vector_model)
-        new_logs = log_parser.fetch_new_logs()
-        
-        if new_logs:
-            if not args.dry_run:
-                db.import_raw_logs(new_logs)
-                print(f"[+] ETL Complete: Ingested {len(new_logs)} session modifications.")
-        else:
-            print("[*] No new logs detected.")
-
-        if not args.dry_run:
-            # Evaluate new sessions
-            try:
-                from core.profile_evaluator import ProfileEvaluator
-                evaluator = ProfileEvaluator()
-                unprofiled = db.get_unprofiled_sessions()
-                if unprofiled:
-                    print(f"[*] Running developer profile evaluation on {len(unprofiled)} sessions...")
-                    for s_id in unprofiled:
-                        try:
-                            if evaluator.evaluate_session(db, s_id):
-                                db.mark_session_profiled(s_id)
-                        except Exception as e:
-                            print(f"[-] Profile evaluation failed for session {s_id[:8]}: {e}")
-            except Exception as e:
-                print(f"[-] Profile evaluation failed: {e}")
-
-            # Run memory consolidator to resolve fact conflicts
-            try:
-                from core.consolidator import MemoryConsolidator
-                consolidator = MemoryConsolidator(db)
-                consolidator.consolidate()
-            except Exception as e:
-                print(f"[-] Fact consolidation failed: {e}")
-
-        if args.backup and not args.dry_run:
-            backup_sqlite_to_yaml(db, engine)
+        async def run_sync():
+            print(f"\n[*] ULM Pipeline Initialized | Parser: {args.parser.upper()} | Injector: {args.injector.upper()}")
             
-        if args.manual:
-            print("[*] Running Injector Stage 2 (Local Structural Reinjection)...")
-            injector_class = INJECTORS[args.injector]
-            memory_injector = injector_class(llm_model=args.llm_model, vector_model=args.vector_model)
-            if memory_injector.inject(db, dry_run=args.dry_run):
-                print("[+] ULM Pipeline Execution completed successfully!")
+            parser_class = PARSERS[args.parser]
+            log_parser = parser_class(llm_model=args.llm_model, vector_model=args.vector_model)
+            new_logs = log_parser.fetch_new_logs()
+            
+            if new_logs:
+                if not args.dry_run:
+                    db.import_raw_logs(new_logs)
+                    print(f"[+] ETL Complete: Ingested {len(new_logs)} session modifications.")
             else:
-                print("[-] Pipeline halted during Reinjection Stage.")
-                sys.exit(1)
-        else:
-            print("[!] Background Sync Complete. Run with '--manual' to update project files.")
+                print("[*] No new logs detected.")
+
+            if not args.dry_run:
+                # Evaluate new sessions asynchronously
+                try:
+                    from core.profile_evaluator import ProfileEvaluator
+                    evaluator = ProfileEvaluator()
+                    unprofiled = db.get_unprofiled_sessions()
+                    if unprofiled:
+                        print(f"[*] Running developer profile evaluation on {len(unprofiled)} sessions...")
+                        
+                        # Create a worker pool to process sessions in parallel
+                        async def worker(queue):
+                            while not queue.empty():
+                                s_id = await queue.get()
+                                try:
+                                    if await evaluator.evaluate_session(db, s_id):
+                                        db.mark_session_profiled(s_id)
+                                except Exception as e:
+                                    print(f"[-] Profile evaluation failed for session {s_id[:8]}: {e}")
+                                finally:
+                                    queue.task_done()
+
+                        queue = asyncio.Queue()
+                        for s_id in unprofiled:
+                            queue.put_nowait(s_id)
+                        
+                        # Run 4 workers in parallel (adjustable based on LLM capacity)
+                        workers = [asyncio.create_task(worker(queue)) for _ in range(4)]
+                        await asyncio.gather(*workers)
+                        await queue.join()
+                    
+                    await evaluator.close()
+                except Exception as e:
+                    print(f"[-] Profile evaluation failed: {e}")
+
+                # Run memory consolidator to resolve fact conflicts
+                try:
+                    from core.consolidator import MemoryConsolidator
+                    consolidator = MemoryConsolidator(db)
+                    consolidator.consolidate()
+                except Exception as e:
+                    print(f"[-] Fact consolidation failed: {e}")
+
+            if args.backup and not args.dry_run:
+                backup_sqlite_to_yaml(db, engine)
+                
+            if args.manual:
+                print("[*] Running Injector Stage 2 (Local Structural Reinjection)...")
+                injector_class = INJECTORS[args.injector]
+                memory_injector = injector_class(llm_model=args.llm_model, vector_model=args.vector_model)
+                if memory_injector.inject(db, dry_run=args.dry_run):
+                    print("[+] ULM Pipeline Execution completed successfully!")
+                else:
+                    print("[-] Pipeline halted during Reinjection Stage.")
+                    sys.exit(1)
+            else:
+                print("[!] Background Sync Complete. Run with '--manual' to update project files.")
+
+        # Execute the async sync process
+        asyncio.run(run_sync())
 
 if __name__ == "__main__":
     main()

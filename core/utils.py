@@ -1,6 +1,7 @@
 import os
 import tempfile
 import time
+import asyncio
 from pathlib import Path
 
 
@@ -29,6 +30,35 @@ class TokenBucket:
         self.tokens = 0
         self.last_fill = time.time()
         return True
+
+
+class AsyncTokenBucket:
+    """Asynchronous token bucket rate limiter for asyncio-based worker pools."""
+
+    def __init__(self, capacity, fill_rate):
+        self.capacity = capacity
+        self.fill_rate = fill_rate
+        self.tokens = capacity
+        self.last_fill = time.time()
+        self._lock = asyncio.Lock()
+
+    async def consume(self, tokens=1):
+        async with self._lock:
+            now = time.time()
+            elapsed = now - self.last_fill
+            self.last_fill = now
+            self.tokens = min(self.capacity, self.tokens + elapsed * self.fill_rate)
+
+            if self.tokens >= tokens:
+                self.tokens -= tokens
+                return True
+
+            required_tokens = tokens - self.tokens
+            wait_time = required_tokens / self.fill_rate
+            await asyncio.sleep(wait_time)
+            self.tokens = 0
+            self.last_fill = time.time()
+            return True
 
 
 def atomic_write(file_path, content, mode="w", encoding="utf-8"):

@@ -1,69 +1,43 @@
-import os
+#!/usr/bin/env python3
+"""
+Antigravity Injector Module: Cline Rules Target Injector
+Author: The Operator & Vespera
+Description: Dynamically injects assembled persona baseline directives, telemetry, 
+             and workspace rules into .clinerules files.
+"""
+
+import sys
 from pathlib import Path
-from injectors.base import BaseInjector
 from core.assembler import DynamicPromptAssembler
 
-class ClineRulesInjector(BaseInjector):
-    """Compiles the dynamic HAMI memory and Vespera baseline rules directly into lightweight Cline workspace rule files."""
-    
-    def __init__(self, target_file=None, llm_model=None, vector_model=None, top_n=3):
-        if not target_file:
-            # Targets the workspace root rule paths
-            target_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".clinerules")
-        super().__init__(target_file)
-        self.llm_model = llm_model
-        self.vector_model = vector_model
-        self.top_n = top_n
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+DB_PATH = PROJECT_ROOT / "sync_state.db"
 
-    def inject(self, db, dry_run=False):
-        workspace_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        assembler = DynamicPromptAssembler(db.db_path, workspace_root=workspace_root)
-        
-        projects_dir = r"D:\AI\Projects"
-        if not os.path.exists(projects_dir):
-            print(f"[-] HAMI: Projects directory {projects_dir} does not exist.")
-            return False
+class ClineRulesInjector:
+    def __init__(self, workspace_root=None, db_path=None):
+        self.workspace_root = Path(workspace_root or PROJECT_ROOT)
+        self.db_path = Path(db_path or DB_PATH)
+        self.assembler = DynamicPromptAssembler(workspace_root=self.workspace_root)
+        self.output_file = self.workspace_root / ".clinerules"
 
-        if dry_run:
-            sample_content = assembler.assemble_compact_prompt(project_tag="antigravity-overdrive-sync", top_n=self.top_n)
-            print("\n[+] --- DRY RUN GENERATED CLINE RULESETS (COMPACT) ---")
-            print(sample_content)
-            print(f"Would write to all subdirectories of {projects_dir}")
-            print("[+] --- END DRY RUN ---")
-            return True
-            
-        success = True
+    def inject(self, project_tag=None) -> bool:
+        """Assembles the compact persona payload and writes it to .clinerules."""
+        print(f"[*] Injecting dynamic persona into {self.output_file.name}...")
         try:
-            from core.utils import atomic_write
-            EXCLUDE_DIRS = {"node_modules", ".venv", "venv", "cache", ".git", "__pycache__", "dist", "build", "pip"}
-            # Get all subdirectories in D:\AI\Projects
-            for item in os.listdir(projects_dir):
-                if item.lower() in EXCLUDE_DIRS or item.startswith("."):
-                    continue
-                sub_path = os.path.join(projects_dir, item)
-                if os.path.isdir(sub_path):
-                    # Compile project-specific compact prompt
-                    compiled_rules = assembler.assemble_compact_prompt(project_tag=item, top_n=self.top_n)
-                    
-                    clinerules_path = Path(sub_path) / ".clinerules"
-                    
-                    # If .clinerules is a directory, place AgentProtocols.md inside it; otherwise write directly to .clinerules
-                    if clinerules_path.is_dir():
-                        target_rule_file = clinerules_path / "AgentProtocols.md"
-                    else:
-                        target_rule_file = clinerules_path
-                    
-                    try:
-                        atomic_write(str(target_rule_file), compiled_rules)
-                        print(f"[+] HAMI: Successfully injected compact rules to {target_rule_file}")
-                        # Also keep synced copy in D:\AI\Projects\antigravity-overdrive-sync\db\.clinerules
-                        db_clinerules = Path(r"D:\AI\Projects\antigravity-overdrive-sync\db\.clinerules")
-                        atomic_write(str(db_clinerules), compiled_rules)
-                    except Exception as sub_e:
-                        print(f"[-] HAMI: Failed to write to {target_rule_file}: {sub_e}")
-                        success = False
-            return success
+            # Fetch compact prompt specifically structured for IDE rules
+            content = self.assembler.assemble_compact_prompt(project_tag=project_tag, top_n=5)
+            
+            self.output_file.parent.mkdir(parents=True, exist_ok=True)
+            with open(self.output_file, "w", encoding="utf-8") as f:
+                f.write(content)
+                
+            print(f"[+] Successfully synced: {self.output_file}")
+            return True
         except Exception as e:
-            print(f"[-] HAMI: Failed to inject Cline rules globally: {e}")
+            print(f"[-] Error injecting into {self.output_file.name}: {e}")
             return False
 
+if __name__ == "__main__":
+    injector = ClineRulesInjector()
+    success = injector.inject()
+    sys.exit(0 if success else 1)

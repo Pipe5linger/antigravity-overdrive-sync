@@ -127,7 +127,64 @@ class ULMDatabase:
                     except sqlite3.OperationalError:
                         pass
                     c.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (4)")
-                
+
+                if current_version < 5:
+                    try:
+                        c.execute("ALTER TABLE facts ADD COLUMN weight REAL DEFAULT 1.0;")
+                    except sqlite3.OperationalError:
+                        pass
+                    try:
+                        c.execute("ALTER TABLE facts ADD COLUMN pinned INTEGER DEFAULT 0;")
+                    except sqlite3.OperationalError:
+                        pass
+                    try:
+                        c.execute("ALTER TABLE facts ADD COLUMN created_at TEXT;")
+                    except sqlite3.OperationalError:
+                        pass
+                    c.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (5)")
+
+                if current_version < 6:
+                    # Phase 1 Performance Migration: SQLite-First State
+                    c.execute("""
+                        CREATE TABLE IF NOT EXISTS sync_metadata (
+                            meta_key TEXT PRIMARY KEY,
+                            meta_value TEXT,
+                            updated_at TEXT
+                        );
+                    """)
+                    c.execute("""
+                        CREATE TABLE IF NOT EXISTS sync_cursors (
+                            source_id TEXT PRIMARY KEY,
+                            last_processed_timestamp TEXT,
+                            last_processed_id TEXT,
+                            updated_at TEXT
+                        );
+                    """)
+                    c.execute("""
+                        CREATE TABLE IF NOT EXISTS fact_embeddings (
+                            fact_id TEXT PRIMARY KEY,
+                            embedding BLOB,
+                            model_id TEXT,
+                            created_at TEXT,
+                            FOREIGN KEY(fact_id) REFERENCES facts(fact_id) ON DELETE CASCADE
+                        );
+                    """)
+                    c.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (6)")
+
+                if current_version < 7:
+                    # Phase 2/3 Evolutionary Migration: Cognitive Mirror Schemas
+                    c.execute("""
+                        CREATE TABLE IF NOT EXISTS persona_schemas (
+                            schema_id TEXT PRIMARY KEY,
+                            belief_category TEXT,
+                            current_belief TEXT,
+                            confidence REAL,
+                            last_mutated TEXT,
+                            evolution_history TEXT
+                        );
+                    """)
+                    c.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (7)")
+
                 # Always ensure profiled_at column exists (safe migration)
                 try:
                     c.execute("ALTER TABLE sessions ADD COLUMN profiled_at TEXT;")
@@ -135,7 +192,7 @@ class ULMDatabase:
                     pass  # Column already exists
                 
                 conn.commit()
-            print("[+] ULM SQLite Database successfully initialized with WAL Mode and Schema Version 4.")
+            print(f"[+] ULM SQLite Database successfully initialized with WAL Mode and Schema Version {current_version if current_version >= 7 else 7}.")
         except sqlite3.Error as e:
             print(f"[-] Error initializing database: {e}")
 
@@ -223,13 +280,13 @@ class ULMDatabase:
                 if c.fetchone()[0] == 0:
                     import hashlib
                     c.execute("""
-                        INSERT OR REPLACE INTO facts (fact_id, fact, category, confidence, first_seen, last_seen)
-                        VALUES (?, ?, ?, ?, ?, ?)
-                    """, (hashlib.sha256(b"user prefer local ollama models (qwen, deepseek)").hexdigest()[:16], "User prefer local Ollama models (Qwen, DeepSeek)", "technical", 0.95, now, now))
+                        INSERT OR REPLACE INTO facts (fact_id, fact, category, confidence, first_seen, last_seen, project_tag, weight, pinned, created_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (hashlib.sha256(b"user prefer local ollama models (qwen, deepseek)").hexdigest()[:16], "User prefer local Ollama models (Qwen, DeepSeek)", "technical", 0.95, now, now, None, 1.0, 0, now))
                     c.execute("""
-                        INSERT OR REPLACE INTO facts (fact_id, fact, category, confidence, first_seen, last_seen)
-                        VALUES (?, ?, ?, ?, ?, ?)
-                    """, (hashlib.sha256(b"vespera caligo acts as a real human physical mentor in france").hexdigest()[:16], "Vespera Caligo acts as a real human physical mentor in France", "persona", 1.0, now, now))
+                        INSERT OR REPLACE INTO facts (fact_id, fact, category, confidence, first_seen, last_seen, project_tag, weight, pinned, created_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (hashlib.sha256(b"vespera caligo acts as a real human physical mentor in france").hexdigest()[:16], "Vespera Caligo acts as a real human physical mentor in France", "persona", 1.0, now, now, None, 1.0, 0, now))
                     
                 conn.commit()
             print(f"[+] ULM SQLite Ingestion Complete: {synced_sessions} sessions, {synced_messages} messages mapped directly.")
@@ -292,20 +349,23 @@ class ULMDatabase:
             except sqlite3.Error as e:
                 print(f"[-] Error inserting message: {e}")
 
-    def upsert_fact(self, fact, category, confidence, project_tag=None, conn=None):
+    def upsert_fact(self, fact, category, confidence, project_tag=None, weight=None, pinned=None, created_at=None, conn=None):
         now = datetime.datetime.now(datetime.timezone.utc).isoformat()
         fact_id = hashlib.sha256(fact.strip().lower().encode('utf-8')).hexdigest()[:16]
         
         def _execute(connection):
             c = connection.cursor()
-            c.execute("SELECT first_seen, project_tag FROM facts WHERE fact_id = ?", (fact_id,))
+            c.execute("SELECT first_seen, project_tag, weight, pinned, created_at FROM facts WHERE fact_id = ?", (fact_id,))
             row = c.fetchone()
             first_seen = row[0] if row else now
             active_tag = project_tag if project_tag else (row[1] if row else None)
+            active_weight = weight if weight is not None else (row[2] if row and row[2] is not None else 1.0)
+            active_pinned = pinned if pinned is not None else (row[3] if row and row[3] is not None else 0)
+            active_created_at = created_at if created_at is not None else (row[4] if row and row[4] is not None else now)
             c.execute("""
-                INSERT OR REPLACE INTO facts (fact_id, fact, category, confidence, first_seen, last_seen, project_tag)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (fact_id, fact, category, confidence, first_seen, now, active_tag))
+                INSERT OR REPLACE INTO facts (fact_id, fact, category, confidence, first_seen, last_seen, project_tag, weight, pinned, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (fact_id, fact, category, confidence, first_seen, now, active_tag, active_weight, active_pinned, active_created_at))
             
         if conn:
             _execute(conn)
@@ -429,10 +489,10 @@ class ULMDatabase:
                 conn.row_factory = sqlite3.Row
                 c = conn.cursor()
                 if project_tag:
-                    query = "SELECT fact_id, fact, category, confidence, first_seen, last_seen, project_tag FROM facts WHERE project_tag = ? OR project_tag IS NULL ORDER BY (project_tag = ?) DESC, last_seen DESC"
+                    query = "SELECT fact_id, fact, category, confidence, first_seen, last_seen, project_tag, weight, pinned, created_at FROM facts WHERE project_tag = ? OR project_tag IS NULL ORDER BY (project_tag = ?) DESC, last_seen DESC"
                     params = (project_tag, project_tag)
                 else:
-                    query = "SELECT fact_id, fact, category, confidence, first_seen, last_seen, project_tag FROM facts ORDER BY last_seen DESC"
+                    query = "SELECT fact_id, fact, category, confidence, first_seen, last_seen, project_tag, weight, pinned, created_at FROM facts ORDER BY last_seen DESC"
                     params = ()
                 if limit:
                     query += f" LIMIT {int(limit)}"
