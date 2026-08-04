@@ -1,6 +1,7 @@
 import os
 import sys
 import json
+import asyncio
 import sqlite3
 import datetime
 import requests
@@ -247,6 +248,7 @@ def get_ollama_models():
 def run_sync_task():
     try:
         add_web_log("Starting ULM Pipeline Sync stage...")
+        add_web_log("Step 1/4: Importing pipeline modules...")
         from parsers.antigravity import AntigravityParser
         from injectors.gemini_md import GeminiMdInjector
         from core.profile_evaluator import ProfileEvaluator
@@ -255,29 +257,49 @@ def run_sync_task():
         log_parser = AntigravityParser()
         memory_injector = GeminiMdInjector()
         evaluator = ProfileEvaluator()
+        add_web_log("Step 1/4: Modules imported.")
         
+        add_web_log("Step 2/4: Fetching new logs...")
         new_logs = log_parser.fetch_new_logs(force_ingest=False)
         if new_logs:
             synced_s, synced_m = db.import_raw_logs(new_logs)
             add_web_log(f"ETL Ingested: {synced_s} sessions, {synced_m} messages.")
+        else:
+            add_web_log("No new logs to ingest.")
             
+        add_web_log("Step 3/4: Checking for unprofiled sessions...")
         unprofiled = db.get_unprofiled_sessions()
+        unprofiled_count = len(unprofiled) if unprofiled else 0
+        add_web_log(f"Found {unprofiled_count} unprofiled sessions.")
         if unprofiled:
             # Cap evaluation to a small batch per sync cycle to prevent UI/Thread stall
             batch_limit = 5
             to_process = unprofiled[:batch_limit]
-            add_web_log(f"Evaluating {len(to_process)} of {len(unprofiled)} unprofiled sessions in background worker thread...")
+            add_web_log(f"Evaluating {len(to_process)} of {unprofiled_count} unprofiled sessions...")
             count = 0
             total = len(to_process)
             for s_id in to_process:
                 count += 1
-                if evaluator.evaluate_session(db, s_id):
-                    db.mark_session_profiled(s_id)
+                add_web_log(f"Profile: Evaluating session {count}/{total} ({s_id[:8]}...)")
+                try:
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    result = loop.run_until_complete(evaluator.evaluate_session(db, s_id))
+                    loop.close()
+                    if result:
+                        db.mark_session_profiled(s_id)
+                        add_web_log(f"Profile: Session {s_id[:8]} evaluated successfully.")
+                    else:
+                        add_web_log(f"Profile: Session {s_id[:8]} returned no results.")
+                except Exception as e:
+                    add_web_log(f"[-] Profile evaluation failed for session {s_id[:8]}: {e}")
                 if count % 5 == 0 or count == total:
                     add_web_log(f"Profile Progress: Evaluated {count}/{total} sessions...")
         
+        add_web_log("Step 4/4: Running memory consolidation...")
         consolidator = MemoryConsolidator(db)
         consolidator.consolidate()
+        add_web_log("Consolidation complete. Injecting rules...")
             
         memory_injector.inject(db, dry_run=False)
         add_web_log("[+] ULM Sync & Reinjection completed successfully!")
@@ -285,7 +307,7 @@ def run_sync_task():
         import traceback
         tb = traceback.format_exc()
         add_web_log(f"[-] ULM Sync Error: {e}")
-        for line in tb.splitlines()[-4:]:
+        for line in tb.splitlines()[-6:]:
             add_web_log(f"    TRACE: {line.strip()}")
 
 import threading
