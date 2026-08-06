@@ -57,6 +57,11 @@ def register_plugins():
         INJECTORS["google_docs"] = GoogleDocsInjector
     except Exception as e:
         print(f"[-] Failed to register GoogleDocsInjector: {e}")
+    try:
+        from injectors.copilot import CopilotInjector
+        INJECTORS["copilot"] = CopilotInjector
+    except Exception as e:
+        print(f"[-] Failed to register CopilotInjector: {e}")
 
 def backup_sqlite_to_yaml(db, engine):
     import yaml

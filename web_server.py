@@ -302,6 +302,12 @@ def run_sync_task():
         add_web_log("Consolidation complete. Injecting rules...")
             
         memory_injector.inject(db, dry_run=False)
+        
+        # Inject GitHub Copilot Chat instructions
+        from injectors.copilot import CopilotInjector
+        copilot_injector = CopilotInjector()
+        copilot_injector.inject(db, dry_run=False)
+        
         add_web_log("[+] ULM Sync & Reinjection completed successfully!")
 
         # Purge VRAM and terminate Ollama process if local provider was used
@@ -364,6 +370,22 @@ def trigger_cline_rules():
             return {"status": "failed"}
     except Exception as e:
         add_web_log(f"[-] Error injecting Cline rules: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/actions/copilot")
+def trigger_copilot_instructions():
+    try:
+        add_web_log("Triggering GitHub Copilot instructions injection...")
+        from injectors.copilot import CopilotInjector
+        injector = CopilotInjector()
+        if injector.inject(db):
+            add_web_log("[+] GitHub Copilot instructions injected successfully!")
+            return {"status": "success"}
+        else:
+            add_web_log("[-] GitHub Copilot injection failed.")
+            return {"status": "failed"}
+    except Exception as e:
+        add_web_log(f"[-] Error injecting Copilot instructions: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/actions/google-docs")
