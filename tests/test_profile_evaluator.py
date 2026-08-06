@@ -49,42 +49,48 @@ class TestProfileEvaluator(unittest.TestCase):
             except OSError:
                 pass
 
-    @patch("requests.post")
-    def test_evaluate_session_local_ollama(self, mock_post):
-        # Configure database preferences for local ollama
+    @patch("httpx.AsyncClient.post")
+    @patch("httpx.AsyncClient.get")
+    def test_evaluate_session_local_ollama(self, mock_get, mock_post):
+        import asyncio
         self.db.set_preference("llm_provider", "local_ollama")
         self.db.set_preference("llm_model", "qwen2.5-coder:14b")
         self.db.set_preference("ollama_endpoint", "http://localhost:11434")
 
-        # Mock response from Ollama API with metrics schema inside response string
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "response": json.dumps({
-                "metrics": [{
-                    "category": "strength",
-                    "name": "sqlite-wal-understanding",
-                    "description": "Demonstrated understanding of SQLite WAL concurrency advantages.",
-                    "confidence": 0.95
-                }]
-            }),
-            "done": True
-        }
-        mock_post.return_value = mock_response
+        mock_get_res = MagicMock()
+        mock_get_res.status_code = 200
+        mock_get.return_value = mock_get_res
 
-        # Execute evaluation using the database upsert spy
+        mock_post_res = MagicMock()
+        mock_post_res.status_code = 200
+        mock_post_res.json.return_value = {
+            "message": {
+                "content": json.dumps({
+                    "metrics": [{
+                        "category": "strength",
+                        "name": "sqlite-wal-understanding",
+                        "description": "Demonstrated understanding of SQLite WAL concurrency advantages.",
+                        "confidence": 0.95
+                    }]
+                })
+            }
+        }
+        mock_post.return_value = mock_post_res
+
         with patch.object(self.db, "upsert_profile_metric") as mock_upsert:
-            success = self.evaluator.evaluate_session(self.db, self.session_id)
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            success = loop.run_until_complete(self.evaluator.evaluate_session(self.db, self.session_id))
+            loop.close()
             self.assertTrue(success)
             mock_upsert.assert_called_once_with("strength", "sqlite-wal-understanding", "Demonstrated understanding of SQLite WAL concurrency advantages.", 0.95, project_tag=None)
 
     @patch("urllib.request.urlopen")
     def test_evaluate_session_cloud_gemini(self, mock_urlopen):
-        # Configure database preferences for cloud gemini
+        import asyncio
         self.db.set_preference("llm_provider", "cloud_gemini")
         self.db.set_preference("gemini_api_key", "MOCK_KEY_123")
 
-        # Mock HTTP response from Google Generative Language API
         mock_response = MagicMock()
         mock_response.read.return_value = json.dumps({
             "candidates": [
@@ -110,9 +116,11 @@ class TestProfileEvaluator(unittest.TestCase):
         }).encode("utf-8")
         mock_urlopen.return_value.__enter__.return_value = mock_response
 
-        # Execute evaluation using the database upsert spy
         with patch.object(self.db, "upsert_profile_metric") as mock_upsert:
-            success = self.evaluator.evaluate_session(self.db, self.session_id)
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            success = loop.run_until_complete(self.evaluator.evaluate_session(self.db, self.session_id))
+            loop.close()
             self.assertTrue(success)
             mock_upsert.assert_called_once_with("milestone", "git-setup", "Completed repository tracking setup.", 0.85, project_tag=None)
 

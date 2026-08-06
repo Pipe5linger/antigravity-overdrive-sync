@@ -235,8 +235,12 @@ class ULMDatabase:
                     active_tag = project_tag if project_tag else (row[2] if row else None)
                     
                     c.execute("""
-                        INSERT OR REPLACE INTO sessions (session_id, source, created_at, updated_at, topics, summary, project_tag)
+                        INSERT INTO sessions (session_id, source, created_at, updated_at, topics, summary, project_tag)
                         VALUES (?, ?, ?, ?, ?, ?, ?)
+                        ON CONFLICT(session_id) DO UPDATE SET
+                            updated_at = excluded.updated_at,
+                            summary = COALESCE(excluded.summary, sessions.summary),
+                            project_tag = COALESCE(excluded.project_tag, sessions.project_tag)
                     """, (session_id, "antigravity", created_at, last_mutated, topics, summary, active_tag))
                     synced_sessions += 1
                     

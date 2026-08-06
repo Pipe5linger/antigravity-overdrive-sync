@@ -444,24 +444,27 @@ class MemoryConsolidator:
             try:
                 batch_embeddings = self._get_batch_embeddings(texts_to_embed, batch_size=50)
                 
-                # Match embeddings back to facts and cache them
+                # Match embeddings back to facts and cache them in a single batch transaction
+                cache_rows = []
+                now_str = datetime.datetime.now().isoformat()
                 for (original_fact, fact_dict), embedding in zip(facts_needing_embeddings, batch_embeddings):
                     if embedding and len(embedding) > 0:
                         fact_dict["embedding"] = embedding
-                        # Cache it
-                        try:
-                            with self.db.get_connection() as conn:
-                                c = conn.cursor()
-                                c.execute("INSERT OR REPLACE INTO fact_embeddings (fact_id, embedding, model_id, created_at) VALUES (?, ?, ?, ?)",
-                                          (original_fact["fact_id"], np.array(embedding, dtype=np.float32).tobytes(), "all-minilm", datetime.datetime.now().isoformat()))
-                                conn.commit()
-                        except Exception as e:
-                            print(f"[-] MemoryConsolidator: Failed to cache embedding: {e}")
+                        cache_rows.append((original_fact["fact_id"], np.array(embedding, dtype=np.float32).tobytes(), "all-minilm", now_str))
                     else:
                         fact_dict["embedding"] = []
                         print(f"[-] MemoryConsolidator: Failed to generate embedding for fact {original_fact.get('fact_id', 'unknown')[:8]}")
-                    
                     enriched_facts.append(fact_dict)
+                
+                if cache_rows:
+                    try:
+                        with self.db.get_connection() as conn:
+                            c = conn.cursor()
+                            c.executemany("INSERT OR REPLACE INTO fact_embeddings (fact_id, embedding, model_id, created_at) VALUES (?, ?, ?, ?)", cache_rows)
+                            conn.commit()
+                        print(f"[+] MemoryConsolidator: Batch cached {len(cache_rows)} embeddings to SQLite.")
+                    except Exception as e:
+                        print(f"[-] MemoryConsolidator: Failed to batch cache embeddings: {e}")
                     
             except Exception as e:
                 print(f"[-] MemoryConsolidator: Batch embedding failed: {e}")
@@ -514,11 +517,13 @@ class MemoryConsolidator:
                                 c.execute("DELETE FROM facts WHERE fact_id = ?", (fid,))
                                 total_deleted += 1
                             
+                            # Preserve project_tag from first merged fact if present
+                            cluster_tag = cluster[0].get("project_tag") if cluster else None
                             # Upsert the Golden Fact
                             c.execute("""
-                                INSERT INTO facts (fact, category, confidence, last_seen) 
-                                VALUES (?, ?, ?, ?)
-                            """, (result["golden_fact"], result["category"], result["confidence"], datetime.datetime.now().isoformat()))
+                                INSERT INTO facts (fact, category, confidence, last_seen, project_tag) 
+                                VALUES (?, ?, ?, ?, ?)
+                            """, (result["golden_fact"], result["category"], result["confidence"], datetime.datetime.now().isoformat(), cluster_tag))
                             total_upserted += 1
                             conn.commit()
                     except Exception as e:

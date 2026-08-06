@@ -73,10 +73,22 @@ class AntigravityParser(BaseParser):
         self.source_dirs = source_dirs if isinstance(source_dirs, list) else [source_dirs]
 
     def _load_last_sync_timestamp(self):
-        """Load the last sync timestamp from file with proper error handling.
+        """Load the last sync timestamp from DB preferences with fallback to file.
         Returns:
             float: Unix timestamp if valid, None otherwise
         """
+        try:
+            from core.engine import ULMEngine
+            from core.database import ULMDatabase
+            engine = ULMEngine()
+            db_path = str(Path(engine.target_yaml).with_suffix(".db"))
+            db = ULMDatabase(db_path)
+            ts_str = db.get_preference("last_sync_timestamp")
+            if ts_str:
+                return datetime.strptime(ts_str, "%Y-%m-%d %H:%M:%S").timestamp()
+        except Exception:
+            pass
+
         try:
             if LAST_SYNC_FILE.exists():
                 with open(LAST_SYNC_FILE, 'r', encoding='utf-8') as f:
@@ -88,13 +100,23 @@ class AntigravityParser(BaseParser):
         return None
 
     def _update_last_sync_timestamp(self):
-        """Atomically update the last sync timestamp file."""
+        """Update last sync timestamp in DB preferences and file."""
+        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         try:
-            now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            from core.engine import ULMEngine
+            from core.database import ULMDatabase
+            engine = ULMEngine()
+            db_path = str(Path(engine.target_yaml).with_suffix(".db"))
+            db = ULMDatabase(db_path)
+            db.set_preference("last_sync_timestamp", now_str)
+        except Exception as e:
+            print(f"[-] AntigravityParser: Failed updating DB preference timestamp: {e}")
+
+        try:
             temp_file = LAST_SYNC_FILE.with_suffix('.tmp')
             with open(temp_file, 'w', encoding='utf-8') as f:
                 f.write(now_str)
-            temp_file.replace(LAST_SYNC_FILE)  # Atomic rename
+            temp_file.replace(LAST_SYNC_FILE)
         except Exception as e:
             print(f"[-] AntigravityParser: Failed to update last_sync.txt: {e}")
 

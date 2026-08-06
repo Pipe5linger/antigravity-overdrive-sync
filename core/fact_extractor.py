@@ -24,7 +24,7 @@ class FactExtractor:
         # 3. Specific Infrastructure & Environment Setup
         r"\bmy (server|setup|port|database|db|config|api\s?key|local model|drive|path)\b",
         r"\b(running on port|hosted at|located at [a-z]:[\\/]|drive letter)\b",
-        r"\b(comfyui|ollama|openrouter|vsc|cline|gguf|lora)\b",  # Specific ecosystem tools
+        r"\b(comfyui|ollama|openrouter|vsc|cline|gguf|lora|sqlite|wal)\b",  # Specific ecosystem tools
         
         # 4. Explicit Retention / Memory Commands
         r"\b(remember that|keep in mind|note that|save this|for future reference)\b",

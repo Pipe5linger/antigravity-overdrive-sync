@@ -5,6 +5,8 @@ import json
 import asyncio
 import httpx
 import sqlite3
+import urllib.request
+import urllib.parse
 from core.utils import AsyncTokenBucket
 from core.fact_extractor import FactExtractor
 
@@ -189,7 +191,7 @@ class ProfileEvaluator:
                 }
             }
             
-            self.limiter.consume(1)
+            await self.limiter.consume(1)
             try:
                 req = urllib.request.Request(
                     url,

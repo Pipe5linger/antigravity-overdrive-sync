@@ -39,22 +39,18 @@ class TestMemoryConsolidator(unittest.TestCase):
     def test_consolidate_local_ollama(self, mock_post):
         self.db.set_preference("llm_provider", "local_ollama")
 
-        # Mock Ollama output to perform deletion and upsert
+        # Mock Ollama output to perform synthesis
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
             "response": json.dumps({
-                "deletions": ["f1", "f2"],
-                "upserts": [
-                    {
-                        "fact": "Pilot switched from poetry to pipenv for python packaging",
-                        "category": "technical",
-                        "confidence": 0.95,
-                        "project_tag": "antigravity"
-                    }
-                ]
+                "golden_fact": "Pilot switched from poetry to pipenv for python packaging",
+                "category": "technical",
+                "confidence": 0.95,
+                "merged_ids": ["f1", "f2"],
+                "reasoning": "Synthesized packaging preference shift."
             }),
-            "done": True
+            "embeddings": [[0.1] * 384, [0.1] * 384]
         }
         mock_post.return_value = mock_response
 
