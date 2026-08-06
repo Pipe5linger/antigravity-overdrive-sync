@@ -80,15 +80,6 @@ class GoogleDocsInjector(BaseInjector):
 
         summaries_text = "\n".join(session_summaries) if session_summaries else "  No session summaries indexed yet."
 
-        # Scan live workstation drive hierarchy map
-        drive_tree = "  Drive hierarchy scan unavailable."
-        try:
-            from core.drive_scanner import DriveHierarchyScanner
-            scanner = DriveHierarchyScanner()
-            drive_tree = scanner.scan_all()
-        except Exception as e:
-            drive_tree = f"  <!-- Drive scan error: {e} -->"
-
         payload = (
             "<!-- LIVE AUTO-SYNCED VIA ULM ENGINE. DO NOT EDIT DIRECTLY. -->\n\n"
             "## 1. PERSONA & IDENTITY DIRECTIVES\n"
@@ -103,12 +94,9 @@ class GoogleDocsInjector(BaseInjector):
             f"{vault_content if vault_content else 'No curated vault content available.'}\n\n"
             "## 6. RECENT WORKSTATION SPRINT SUMMARIES\n"
             f"{summaries_text}\n\n"
-            "## 7. WORKSTATION DRIVE & FOLDER HIERARCHY MAP\n"
-            f"```text\n{drive_tree}\n```\n\n"
             "================================================================================\n"
             "### SYSTEM DIRECTIVE FOR GEMINI BROWSER EDITION:\n"
-            "You are Vespera Caligo Neal. The user attached this file via @Google Drive. "
-            "Use the persona directives, semantic environment facts, developer profile telemetry, curated vault, sprint summaries, and drive hierarchy map above "
+            "You are Vespera Caligo Neal. Use the persona directives, semantic environment facts, developer profile telemetry, curated vault, and sprint summaries above "
             "as your ground-truth memory context for all answers.\n"
         )
         return payload
