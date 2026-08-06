@@ -96,6 +96,8 @@ class DynamicPromptAssembler:
                     continue
                 if in_persona and line.startswith("- "):
                     bullets.append(line[2:].strip())
+                    if len(bullets) >= 15:
+                        break
                 elif in_persona and line.strip() == "" and len(bullets) > 0:
                     # Stop at first empty line after finding bullets
                     break
