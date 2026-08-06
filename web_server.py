@@ -422,9 +422,36 @@ def trigger_backup():
         add_web_log(f"[-] Error during YAML backup: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-# Mount Frontend static files
-if frontend_dir.exists():
-    app.mount("/static", StaticFiles(directory=str(frontend_dir)), name="static")
+from fastapi.responses import FileResponse
+
+@app.get("/api/comfy/latest_output")
+def serve_latest_comfy_output():
+    """Finds and serves the newest image file from ComfyUI / Workstation Output directories."""
+    candidate_dirs = [
+        Path(r"D:\AI\Projects\ComfyUI\output"),
+        Path(r"D:\AI\Outputs"),
+        Path(r"C:\Users\boben\Desktop\Antigravity outputs"),
+        Path(r"D:\AI\Antigravity outputs")
+    ]
+    valid_exts = {".png", ".jpg", ".jpeg", ".webp"}
+    latest_file = None
+    latest_mtime = 0
+
+    for cdir in candidate_dirs:
+        if cdir.exists() and cdir.is_dir():
+            try:
+                for entry in cdir.iterdir():
+                    if entry.is_file() and entry.suffix.lower() in valid_exts:
+                        mtime = entry.stat().st_mtime
+                        if mtime > latest_mtime:
+                            latest_mtime = mtime
+                            latest_file = entry
+            except Exception:
+                continue
+
+    if latest_file:
+        return FileResponse(str(latest_file), headers={"Cache-Control": "no-cache, max-age=0"})
+    raise HTTPException(status_code=404, detail="No output images found.")
 
 @app.get("/")
 def serve_index():

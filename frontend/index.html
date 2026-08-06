@@ -10,6 +10,7 @@
     <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body class="dark-theme">
+    <div id="bg-dynamic-overlay"></div>
     <div class="app-container">
         <!-- Sidebar Navigation -->
         <aside class="sidebar">
@@ -39,6 +40,9 @@
                 </button>
                 <button class="nav-item" data-tab="actions">
                     <span class="icon">🚀</span> Actions & Logs
+                </button>
+                <button class="nav-item" onclick="updateDynamicBackground()" style="margin-top:12px; border:1px solid var(--border-glow); background:rgba(168,85,247,0.1);">
+                    <span class="icon">🎨</span> Sync Art Canvas
                 </button>
             </nav>
 

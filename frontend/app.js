@@ -8,6 +8,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initNavigation();
     loadDashboardData();
     startLogPolling();
+    initDynamicBackground();
 });
 
 // Navigation Tab Switching
@@ -480,4 +481,60 @@ function escapeHtml(str) {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#039;');
+}
+
+// Dynamic Background & Palette Extractor
+function initDynamicBackground() {
+    updateDynamicBackground();
+    setInterval(updateDynamicBackground, 15000); // Check for new ComfyUI renders every 15s
+}
+
+async function updateDynamicBackground() {
+    const overlay = document.getElementById('bg-dynamic-overlay');
+    if (!overlay) return;
+
+    const imgUrl = `/api/comfy/latest_output?t=${Date.now()}`;
+    const img = new Image();
+    img.crossOrigin = 'Anonymous';
+
+    img.onload = () => {
+        overlay.style.backgroundImage = `url('${imgUrl}')`;
+        overlay.style.opacity = '0.35';
+
+        // Extract palette from image via canvas
+        try {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = 64;
+            canvas.height = 64;
+            ctx.drawImage(img, 0, 0, 64, 64);
+            const data = ctx.getImageData(0, 0, 64, 64).data;
+
+            let rSum = 0, gSum = 0, bSum = 0, count = 0;
+            for (let i = 0; i < data.length; i += 16) {
+                rSum += data[i];
+                gSum += data[i + 1];
+                bSum += data[i + 2];
+                count++;
+            }
+            const avgR = Math.round(rSum / count);
+            const avgG = Math.round(gSum / count);
+            const avgB = Math.round(bSum / count);
+
+            const primaryAccent = `rgb(${avgR}, ${avgG}, ${avgB})`;
+            const glowAccent = `rgba(${avgR}, ${avgG}, ${avgB}, 0.35)`;
+
+            document.documentElement.style.setProperty('--accent-purple', primaryAccent);
+            document.documentElement.style.setProperty('--border-glow', glowAccent);
+        } catch (e) {
+            console.log('[DynamicBG] Palette extraction skipped.');
+        }
+    };
+
+    img.onerror = () => {
+        // Fallback default gradient background if no image exists
+        overlay.style.opacity = '0';
+    };
+
+    img.src = imgUrl;
 }
