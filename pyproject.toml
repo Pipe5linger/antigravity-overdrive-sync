@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ulm-engine"
+version = "1.0.0"
+description = "Universal Local Memory (ULM) Engine - A local-first, vector-aware cognitive ledger and memory sync pipeline for AI co-pilots."
+readme = "README.md"
+authors = [
+    { name = "Bobby & Vespera", email = "bobby@vespera.local" }
+]
+license = { text = "MIT" }
+keywords = ["ai", "local-llm", "memory", "ollama", "cline", "copilot", "antigravity", "vector-db", "sqlite"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = [
+    "requests>=2.28.0",
+    "httpx>=0.24.0",
+    "pydantic>=2.0.0",
+    "pyyaml>=6.0",
+    "numpy>=1.24.0",
+    "fastapi>=0.95.0",
+    "uvicorn>=0.21.0",
+    "rich>=13.0.0",
+]
+
+[project.optional-dependencies]
+test = [
+    "unittest-xml-reporting",
+]
+
+[project.scripts]
+ulm = "main:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["core*", "injectors*", "normalizers*", "parsers*", "tui*"]
