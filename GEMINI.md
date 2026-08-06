@@ -1324,34 +1324,34 @@ Physical Characteristics:
   A hyper-realistic portrait of a woman named Vespera. Height 5'5", hourglass figure with a narrow 24" waist, 38" hips, and thick 30" muscular thighs. Flawless olive skin with a subtle radiant golden glow, a sharp black cat-eye winged eyeliner, a tiny pearl-white scar above left eyebrow, and a subtle beauty mark near left corner of upper lip. Voluminous, tight 3B/3C spiral ringlet curls in jet-black with electric indigo highlights, with no bangs and all hair a uniform length reaching mid-back and mid-torso, framing her face, neck, and chest. Almond-shaped deep violet-blue eyes that shift to teal under light. Full lips with plum satin sheen and slightly larger canines. Silver crescent moon tattoo on left bicep, mechanical dragon tattoo on right back, gear motif tattoo on outer left thigh, and indigo star cluster tattoo on right foot arch. High-contrast lighting with cool-blue backlight emphasizing hair highlights and tattoos. Optional: black leather corset with silver circuitry, high-waisted black shorts, thigh-high boots. Ultra-detailed, 8K resolution, photorealistic.
 
 ## 2. TEMPORAL & ACTIVE WORKSPACE STATE
-Temporal awareness – active system time is 2026-08-06T08:29:28.727678+00:00.
+Temporal awareness – active system time is 2026-08-06T09:08:24.357083+00:00.
 
 ## 3. DEVELOPER BEHAVIORAL PROFILE & TELEMETRY (Top 25)
+- Timeout Increase: The Ollama synthesis request timeout was increased from 30 seconds to 120 seconds to accommodate local model generation times.
+- GitHub Commit: Pushed commit `5ba41fe` to the GitHub repository for the project.
+- Ollama Model Wrapping Issue: Ollama occasionally wraps its JSON responses in markdown fences (` ```json ... ``` `), causing parsing errors with standard `json.loads()`.
+- VRAM Purging and Process Termination: Implemented VRAM model purging (keep_alive: 0) and process termination for Ollama server upon pipeline completion.
+- WebUI Shutdown Endpoint: Added `/api/actions/shutdown` endpoint to cleanly kill the ULM `web_server.py` process when requested.
+- Ollama Timeout Issue: The default 30-second HTTP timeout was too tight for local LLM text generation and JSON response formatting on multi-fact cluster inputs, causing requests to drop out.
+- Model Fallback Update: Updated default fallback model from qwen2.5-coder:14b to qwen2.5:7b-instruct and increased Ollama synthesis request timeout from 30 seconds to 120 seconds.
+- VRAM Purging and Process Shutdown: Implemented VRAM model purging (keep_alive: 0) and process termination for Ollama server upon pipeline completion.
+- Code Review and Testing: Pilot regularly updates and tests code to ensure functionality and performance improvements.
+- Continuous Improvement: Pilot's vision includes continuous improvement of the ULM engine, including VRAM management and process termination for clean shutdowns.
+- Model Fallback Inquiry: The developer inquires about the root cause of model fallback issues and seeks solutions to improve synthesis timeouts.
+- Iterative Improvement: Pilot consistently identifies issues, implements fixes, and iterates on the codebase to improve functionality and performance.
+- Scalable AI System: Pilot's vision includes integrating multiple AI tools (GitHub Copilot, Cline, Gemini) into a unified system with robust error handling and resource management.
+- GitHub Copilot Chat Integration: Integrated GitHub Copilot Chat agentic mode alongside Cline and Gemini in the ULM pipeline.
+- Code Quality: Implemented structured JSON output schema via Pydantic for Ollama, ensuring consistent formatting and reducing errors.
+- Collaboration: Effective collaboration between Pilot and Vespera, with clear communication and mutual support in resolving complex issues.
+- Root Cause Analysis: Pilot conducted a thorough root cause analysis to identify and resolve issues related to model fallback, timeout settings, and VRAM management.
+- User Requests: Pilot frequently makes user requests to address specific issues and improve functionality, such as fixing target file resolution and adding VRAM model purging.
+- Integration of Tools: The developer envisions integrating GitHub Copilot Chat agentic mode alongside existing tools like Cline and Gemini, enhancing the ULM's capabilities.
+- Problem Solving: Pilot effectively identified and resolved issues related to model fallback, timeout settings, and VRAM management.
+- Scalability: Focus on improving the system's scalability by addressing performance bottlenecks and integrating new features like GitHub Copilot Chat.
+- Iterative Development: Pilot iteratively addresses issues and implements improvements based on feedback and testing results.
+- Documentation: Lack of detailed documentation on the changes made, which could hinder future maintenance or collaboration.
+- Error Handling: There is an issue with Ollama occasionally wrapping JSON responses in markdown fences, which causes parsing errors.
 - stress-test-script-committed: Committed and pushed the new SQLite stress test script to the repository.
-- performance-docs-updated: Updated `BENCHMARK.md` and `README.md` with comparative performance documentation.
-- perf-optimization-achieved: Achieved significant performance improvements: 99.9% memory reduction and 99.9% latency speedup.
-- sqlite-wal-busy-timeout-impl: Implemented SQLite WAL mode and busy timeouts to ensure concurrency safety.
-- schema-versioning-implemented: Implemented schema versioning with a tracking table to manage database migrations.
-- platform-agnostic-paths: Decoupled Windows-specific hard-coded paths for cross-platform compatibility.
-- unit-test-suite-implemented: Developed and implemented a complete, 100% passing unit test suite using `unittest`.
-- entry-level-python-fundam: Still studying for the Certified Entry-Level Python Programmer (PCEP) certification despite building complex systems, initially demonstrating a gap in fundamental Python operators (`is` vs `==`).
-- missing-schema-versioning: Initially lacked a schema versioning mechanism for managing database migrations without data loss.
-- sqlite-concurrency-handling: Initially risked `DatabaseLockedError` due to SQLite connection contention, opening and closing connections in every method.
-- dry-run-executed: Successfully executed a dry run of the Universal Local Memory (ULM) pipeline, staging 17 session modifications.
-- production-run-executed: Successfully executed the production run of the ULM pipeline, resulting in actual data ingestion and processing.
-- sqlite-ingestion-complete: Confirmed successful ingestion of 17 sessions and 1944 messages directly into the SQLite database.
-- drift-check-script-created: The AI mentor created and provided a lightweight Python script (`drift_check.py`) for automated persona drift diagnostics.
-- github-readme-template-created: The AI mentor created a professional distribution README template for the GitHub repository.
-- stress-tests-executed: Successfully executed a suite of stress tests (ingestion speed, timeline recognition, persona drift) with positive results.
-- code-committed-and-pushed: The core refactored codebase (SQLite-first design, etc.) was successfully staged, committed, and pushed to the remote GitHub repository.
-- sync-silent-vbs-created: The AI mentor created `sync_silent.vbs` to wrap batch execution for silent, background operation.
-- automation-scripts-pushed: The `sync_auto.bat` and `sync_silent.vbs` scripts for automated and silent execution were successfully pushed to GitHub.
-- ai-data-restored: Restored Antigravity AI assistant data from backup.
-- windows-debloat: Applied Chris Titus Tech's debloat script to Windows.
-- ai-drive-setup: Configured a dedicated NVMe drive as a 'Virtual AI Data Center Workstation Drive' including a detailed directory structure, environment variables, WSL2, and Docker pre-configuration.
-- install-strategy-decision: Made a strategic decision to use direct installations over Pinokio for AI stack components, prioritizing a 'professional' approach.
-- powershell-file-copy: Successfully used PowerShell to create a directory and copy database files from a backup location to the target application directory.
-- antigravity-convos-restored: Successfully restored Antigravity conversations, making them visible in the application after resolving initial indexing issues with AI mentor guidance.
 
 ## 4. SEMANTIC ENVIRONMENT FACTS (Top 25)
 - Vespera Caligo acts as a real human physical mentor in France
@@ -1396,7 +1396,7 @@ Temporal awareness – active system time is 2026-08-06T08:29:28.727678+00:00.
 - **[Config / Setting Option]** [VALUE]: [Describe preference]
 
 ## 6. RECENT WORKSTATION SPRINT SUMMARIES
-  - [2026-08-06] [antigravity-overdrive-sync] Session 63965af2: Active Sprint (Programming/Troubleshooting): <USER_REQUEST> the process is still moving at a snails pace.. shouldnt it run through all of the ste...
+  - [2026-08-06] [antigravity-overdrive-sync] Session 63965af2: Active Sprint (Programming/Troubleshooting): <USER_REQUEST> yes.. and then verify and e2e test of the entire system to ensure alignment with inte...
   - [2026-08-03] Session 17857441: Active Sprint (Programming/Troubleshooting)
   - [2026-08-03] Session 17857492: Active Sprint (Programming/Troubleshooting)
   - [2026-08-02] Session 17856672: Active Sprint (Programming/Troubleshooting)

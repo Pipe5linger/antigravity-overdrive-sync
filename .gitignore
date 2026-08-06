@@ -6,11 +6,19 @@ __pycache__/
 # OS Metadata
 .DS_Store
 Thumbs.db
+Desktop.ini
+
+# Virtual Environments
+.venv/
+env/
+venv/
+ENV/
 
 # User Outputs & Sensitive Session Data (Guarantees no local logs are leaked upstream)
 sync_state.yaml
 *.yaml.tmp
 *.tmp
+*.log
 Antigravity outputs/
 .env
 .env.local
@@ -23,9 +31,15 @@ sync_state.db
 *-wal
 *-shm
 Modelfile.local
+Modelfile.txt
 *.prof
 test_*.db
 /.vespera_memory/
+db/
 
-# Benchmarks
-benchmark/
+# Temporary & Test Artifacts
+scratch/
+.pytest_cache/
+
+# Local System Memory / Drive Logs
+D:/Memory/
