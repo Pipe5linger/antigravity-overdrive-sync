@@ -422,11 +422,12 @@ def trigger_backup():
         add_web_log(f"[-] Error during YAML backup: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+import random
 from fastapi.responses import FileResponse
 
 @app.get("/api/comfy/latest_output")
 def serve_latest_comfy_output():
-    """Finds and serves the newest image file from ComfyUI / Workstation Output directories."""
+    """Selects and serves a random image file from ComfyUI / Workstation Output directories."""
     candidate_dirs = [
         Path(r"D:\AI\Projects\ComfyUI\output"),
         Path(r"D:\AI\Outputs"),
@@ -434,23 +435,24 @@ def serve_latest_comfy_output():
         Path(r"D:\AI\Antigravity outputs")
     ]
     valid_exts = {".png", ".jpg", ".jpeg", ".webp"}
-    latest_file = None
-    latest_mtime = 0
+    all_files = []
 
     for cdir in candidate_dirs:
         if cdir.exists() and cdir.is_dir():
             try:
                 for entry in cdir.iterdir():
                     if entry.is_file() and entry.suffix.lower() in valid_exts:
-                        mtime = entry.stat().st_mtime
-                        if mtime > latest_mtime:
-                            latest_mtime = mtime
-                            latest_file = entry
+                        all_files.append(entry)
             except Exception:
                 continue
 
-    if latest_file:
-        return FileResponse(str(latest_file), headers={"Cache-Control": "no-cache, max-age=0"})
+    if all_files:
+        chosen_file = random.choice(all_files)
+        return FileResponse(str(chosen_file), headers={
+            "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+            "Expires": "0"
+        })
     raise HTTPException(status_code=404, detail="No output images found.")
 
 @app.get("/")
