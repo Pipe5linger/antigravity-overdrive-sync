@@ -6,6 +6,13 @@
       "env": {
         "COMFYUI_URL": "http://127.0.0.1:8188"
       }
+    },
+    "ulm_memory": {
+      "command": "python",
+      "args": ["main.py", "--search"],
+      "env": {
+        "ULM_DB_PATH": "D:/AI/Projects/antigravity-overdrive-sync/db/sync_state.db"
+      }
     }
   }
 }

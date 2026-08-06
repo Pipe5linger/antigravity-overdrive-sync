@@ -324,6 +324,12 @@ def run_sync_task():
 import threading
 _sync_thread_running = False
 
+@app.get("/api/search")
+def search_memory(q: str = Query(...), limit: int = Query(15)):
+    """Direct database search endpoint allowing LLMs or users to query sync_state.db on demand."""
+    results = db.search_memory_db(query_term=q, limit=limit)
+    return {"status": "success", "data": results}
+
 @app.post("/api/actions/shutdown")
 def shutdown_webui_server():
     """Shuts down the ULM WebUI server process cleanly."""

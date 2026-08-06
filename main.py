@@ -1,5 +1,6 @@
 import sys
 import os
+import json
 import argparse
 import sqlite3
 import asyncio
@@ -91,7 +92,8 @@ def backup_sqlite_to_yaml(db, engine):
 def main():
     register_plugins()
     parser = argparse.ArgumentParser(description="Universal Local Memory (ULM) Agent Pipeline")
-    parser.add_argument("command", nargs="?", choices=["sync", "get-context", "tui", "webui", "daemon"], default="sync")
+    parser.add_argument("command", nargs="?", choices=["sync", "get-context", "tui", "webui", "daemon", "search"], default="sync")
+    parser.add_argument("--query", "-q", type=str, help="Search query for memory database")
     parser.add_argument("--parser", choices=list(PARSERS.keys()), default="antigravity")
     parser.add_argument("--injector", choices=list(INJECTORS.keys()), default="gemini_md")
     parser.add_argument("--dry-run", action="store_true")
@@ -105,6 +107,15 @@ def main():
     db_path = str(Path(engine.target_yaml).with_suffix(".db"))
     db = ULMDatabase(db_path)
     db.initialize_db()
+
+    if args.command == "search":
+        query_text = args.query or " ".join(sys.argv[2:]) if len(sys.argv) > 2 else ""
+        if not query_text:
+            print("[-] Please specify a search term using --query 'search string'")
+            return
+        results = db.search_memory_db(query_text)
+        print(json.dumps(results, indent=2))
+        return
 
     if args.command == "webui":
         from web_server import run_server

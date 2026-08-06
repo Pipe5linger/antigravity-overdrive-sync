@@ -526,3 +526,42 @@ class ULMDatabase:
                 conn.commit()
         except sqlite3.Error as e:
             print(f"[-] Error marking session as profiled: {e}")
+
+    def search_memory_db(self, query_term: str, limit: int = 15):
+        """Performs a full-text search across session messages, developer metrics, and golden facts."""
+        results = {"query": query_term, "messages": [], "metrics": [], "facts": []}
+        wildcard = f"%{query_term}%"
+        try:
+            with self.get_connection() as conn:
+                conn.row_factory = sqlite3.Row
+                c = conn.cursor()
+                # 1. Search Messages
+                c.execute("""
+                    SELECT session_id, role, content, created_at 
+                    FROM messages 
+                    WHERE content LIKE ? 
+                    ORDER BY created_at DESC LIMIT ?
+                """, (wildcard, limit))
+                results["messages"] = [dict(r) for r in c.fetchall()]
+
+                # 2. Search Developer Profile Metrics
+                c.execute("""
+                    SELECT category, name, description, confidence, frequency, last_seen 
+                    FROM developer_profile 
+                    WHERE name LIKE ? OR description LIKE ? 
+                    ORDER BY last_seen DESC LIMIT ?
+                """, (wildcard, wildcard, limit))
+                results["metrics"] = [dict(r) for r in c.fetchall()]
+
+                # 3. Search Golden Facts
+                c.execute("""
+                    SELECT fact, category, confidence, last_seen 
+                    FROM facts 
+                    WHERE fact LIKE ? OR category LIKE ? 
+                    ORDER BY last_seen DESC LIMIT ?
+                """, (wildcard, wildcard, limit))
+                results["facts"] = [dict(r) for r in c.fetchall()]
+
+        except sqlite3.Error as e:
+            print(f"[-] Error searching memory database: {e}")
+        return results
