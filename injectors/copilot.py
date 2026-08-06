@@ -16,8 +16,10 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from core.assembler import DynamicPromptAssembler
 
 class CopilotInjector:
-    def __init__(self, workspace_root=None, db_path=None):
+    def __init__(self, workspace_root=None, db_path=None, llm_model=None, vector_model=None):
         self.workspace_root = Path(workspace_root or PROJECT_ROOT)
+        self.llm_model = llm_model
+        self.vector_model = vector_model
         # Default target is root workspace .github/copilot-instructions.md if D:\AI exists
         root_github = Path(r"D:\AI\.github\copilot-instructions.md")
         if not workspace_root and Path(r"D:\AI").exists():
