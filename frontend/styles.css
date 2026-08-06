@@ -46,8 +46,8 @@ body {
     background-repeat: no-repeat;
     z-index: 0;
     transition: opacity 1s ease-in-out, filter 0.8s ease-in-out;
-    opacity: 0.65;
-    filter: blur(8px) brightness(0.65) saturate(1.2);
+    opacity: 0.50;
+    filter: blur(4px) brightness(0.55) saturate(1.2);
 }
 
 .app-container {
