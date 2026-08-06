@@ -183,9 +183,13 @@ def main():
                     print("[+] ULM Pipeline Execution completed successfully!")
                 else:
                     print("[-] Pipeline halted during Reinjection Stage.")
-                    sys.exit(1)
-            else:
-                print("[!] Background Sync Complete. Run with '--manual' to update project files.")
+            # Purge VRAM and terminate Ollama after sync pipeline completes
+            try:
+                from core.utils import shutdown_ollama
+                ollama_endpoint = db.get_preference("ollama_endpoint", "http://localhost:11434")
+                shutdown_ollama(endpoint=ollama_endpoint)
+            except Exception as e:
+                print(f"[-] Ollama shutdown error: {e}")
 
         # Execute the async sync process
         asyncio.run(run_sync())

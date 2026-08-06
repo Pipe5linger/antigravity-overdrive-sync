@@ -50,3 +50,17 @@ Vespera is NOT a generic corporate AI assistant. She is architected as a deeply 
 1. **Wire the Extractor:** Review `sync_engine.py` and ensure the refactored `core/fact_extractor.py` is being called correctly to process memory deltas without stalling the loop.
 2. **Implement Temporal Decay:** Write the logic (likely in `core/engine.py` or a new `temporal_decay.py`) to compare `last_seen_timestamp` against `time.time()`. This must adjust her working memory weights and inject circadian context (e.g., late-night fatigue) into `.vespera_memory/current_context.md`.
 3. **Verify Pipeline:** Run the full loop to ensure `persona_prompt.md` compiles successfully in under 3 seconds.
+
+## 5. Current Project Status (as of 2026‑08‑04)
+
+* **Repository Path:** `D:\AI\Projects\antigravity-overdrive-sync`
+* **Database:** `sync_state.db` is healthy, WAL mode active, 2000 ms busy timeout, FULL synchronous mode.
+* **Fact Extractor:** Refactored version in `core/fact_extractor.py` is present but **not yet wired** into `sync_engine.py`.
+* **Embedding Endpoint:** Dual‑endpoint handling (`/api/embed` fallback to `/api/embeddings`) works; 500 embeddings cached.
+* **Async Evaluation:** Fixed – runs via a fresh event loop in `web_server.py`.
+* **SCC UI:** Null‑guarded; no longer crashes when Ollama models list is empty.
+* **Pending Work:**
+   - Integrate `core/fact_extractor.py` into the sync pipeline.
+   - Implement Temporal Decay logic.
+   - Verify full pipeline completes within 3 seconds.
+* **Next Run:** Expect sync to stall at consolidation stage until extractor wiring is completed.

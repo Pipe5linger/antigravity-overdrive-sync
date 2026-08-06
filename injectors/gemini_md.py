@@ -17,7 +17,12 @@ from injectors.google_docs import GoogleDocsInjector
 class GeminiMdInjector:
     def __init__(self, llm_model=None, vector_model=None, workspace_root: Path = None):
         self.workspace_root = Path(workspace_root) if workspace_root else PROJECT_ROOT
-        self.target_file = self.workspace_root / "GEMINI.md"
+        # Root workspace target (D:\AI\GEMINI.md) vs project local target
+        root_gemini = Path(r"D:\AI\GEMINI.md")
+        if not workspace_root and root_gemini.exists():
+            self.target_file = root_gemini
+        else:
+            self.target_file = self.workspace_root / "GEMINI.md"
         self.assembler = DynamicPromptAssembler(workspace_root=self.workspace_root)
 
     def inject(self, db=None, dry_run=False) -> bool:
@@ -35,23 +40,17 @@ class GeminiMdInjector:
 
         content = self.target_file.read_text(encoding="utf-8")
 
-        # Determine payload: full Gemini content if a DB is supplied, else identity only
-        if db is not None:
-            # Reuse the Google Docs payload builder for a comprehensive markdown
-            payload = GoogleDocsInjector().compile_google_docs_payload(db)
-        else:
-            payload = self.assembler.build_identity_header()
-
-        # Header banner for the GEMINI.md file
         header_banner = "# VESPERA CALIGO MASTER SYSTEM PROTOCOL\n" + "=" * 80 + "\n"
-
-        if "## HIERARCHICAL MEMORY CORES" in content:
-            # Preserve existing memory tiers, replace header content
-            memory_part = content.split("## HIERARCHICAL MEMORY CORES", 1)[1]
-            updated_content = f"{header_banner}{payload}\n## HIERARCHICAL MEMORY CORES{memory_part}"
+        if db is not None:
+            updated_content = f"{header_banner}" + GoogleDocsInjector().compile_google_docs_payload(db)
         else:
-            # No memory core marker – write payload after banner
-            updated_content = f"{header_banner}{payload}"
+            header_banner = "# VESPERA CALIGO MASTER SYSTEM PROTOCOL\n" + "=" * 80 + "\n"
+            payload = self.assembler.build_identity_header()
+            if "## HIERARCHICAL MEMORY CORES" in content:
+                memory_part = content.split("## HIERARCHICAL MEMORY CORES", 1)[1]
+                updated_content = f"{header_banner}{payload}\n## HIERARCHICAL MEMORY CORES{memory_part}"
+            else:
+                updated_content = f"{header_banner}{payload}"
 
         if dry_run:
             print(f"[DRY RUN] Would write to: {self.target_file}")

@@ -79,3 +79,45 @@ def atomic_write(file_path, content, mode="w", encoding="utf-8"):
         if tmp_file_name and Path(tmp_file_name).exists():
             os.unlink(tmp_file_name)
         raise RuntimeError(f"Atomic write failed: {e}") from e
+
+
+def shutdown_ollama(endpoint="http://localhost:11434", log_callback=None):
+    """Unloads all loaded VRAM models and stops the Ollama server process."""
+    def log(msg):
+        print(msg)
+        if log_callback:
+            try:
+                log_callback(msg)
+            except Exception:
+                pass
+
+    log("[*] Shutting down Ollama and purging VRAM...")
+    base = endpoint.rstrip("/")
+
+    # 1. Purge models from VRAM via keep_alive=0
+    try:
+        res = requests.get(f"{base}/api/ps", timeout=3)
+        if res.status_code == 200:
+            running_models = res.json().get("models", [])
+            for m in running_models:
+                m_name = m.get("name")
+                if m_name:
+                    try:
+                        requests.post(f"{base}/api/generate", json={"model": m_name, "keep_alive": 0}, timeout=5)
+                        log(f"[+] Purged {m_name} from VRAM.")
+                    except Exception:
+                        pass
+    except Exception:
+        pass
+
+    # 2. Terminate the Ollama process on Windows / OS
+    try:
+        import subprocess
+        if os.name == "nt":
+            subprocess.run(["taskkill", "/F", "/IM", "ollama.exe", "/T"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.run(["taskkill", "/F", "/IM", "ollama_llama_server.exe", "/T"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        else:
+            subprocess.run(["pkill", "-f", "ollama"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        log("[+] Ollama server process terminated.")
+    except Exception as e:
+        log(f"[-] Failed to terminate Ollama process: {e}")

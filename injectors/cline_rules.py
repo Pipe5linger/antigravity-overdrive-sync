@@ -11,7 +11,7 @@ from pathlib import Path
 from core.assembler import DynamicPromptAssembler
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-DB_PATH = PROJECT_ROOT / "sync_state.db"
+DB_PATH = PROJECT_ROOT / "db" / "sync_state.db"
 
 class ClineRulesInjector:
     def __init__(self, workspace_root=None, db_path=None):

@@ -30,9 +30,9 @@ class DynamicPromptAssembler:
         else:
             self.workspace_root = Path(workspace_root)
 
-        # Resolve database path – default to historic location.
+        # Resolve database path – default to db/sync_state.db.
         if db_path is None:
-            self.db_path = Path(r"D:\AI\Antigravity outputs\sync_state.db")
+            self.db_path = self.workspace_root / "db" / "sync_state.db"
         else:
             self.db_path = Path(db_path)
 

@@ -166,6 +166,8 @@ class ProfileEvaluator:
                 response = await self.client.post(url, json=payload)
                 response.raise_for_status()
                 raw_output = response.json()["message"]["content"].strip()
+                if raw_output.startswith("```"):
+                    raw_output = raw_output.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
                 result = json.loads(raw_output)
                 metrics = result.get("metrics", []) if isinstance(result, dict) else []
             except Exception as e:

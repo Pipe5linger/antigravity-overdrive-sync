@@ -60,7 +60,7 @@ def get_stats():
         "total_profile_metrics": 0,
         "total_preferences": 0,
         "llm_provider": db.get_preference("llm_provider", "local_ollama"),
-        "llm_model": db.get_preference("llm_model", "qwen2.5-coder-vespera:latest"),
+        "llm_model": db.get_preference("llm_model", "qwen2.5:7b-instruct"),
         "ollama_endpoint": db.get_preference("ollama_endpoint", "http://localhost:11434"),
         "google_docs_webhook": db.get_preference("google_docs_webhook_url", ""),
         "last_updated": datetime.datetime.now().isoformat()
@@ -297,12 +297,17 @@ def run_sync_task():
                     add_web_log(f"Profile Progress: Evaluated {count}/{total} sessions...")
         
         add_web_log("Step 4/4: Running memory consolidation...")
-        consolidator = MemoryConsolidator(db)
+        consolidator = MemoryConsolidator(db, log_callback=add_web_log)
         consolidator.consolidate()
         add_web_log("Consolidation complete. Injecting rules...")
             
         memory_injector.inject(db, dry_run=False)
         add_web_log("[+] ULM Sync & Reinjection completed successfully!")
+
+        # Purge VRAM and terminate Ollama process if local provider was used
+        from core.utils import shutdown_ollama
+        ollama_endpoint = db.get_preference("ollama_endpoint", "http://localhost:11434")
+        shutdown_ollama(endpoint=ollama_endpoint, log_callback=add_web_log)
     except Exception as e:
         import traceback
         tb = traceback.format_exc()
@@ -313,8 +318,17 @@ def run_sync_task():
 import threading
 _sync_thread_running = False
 
+@app.post("/api/actions/shutdown")
+def shutdown_webui_server():
+    """Shuts down the ULM WebUI server process cleanly."""
+    def _kill():
+        time.sleep(1)
+        os._exit(0)
+    threading.Thread(target=_kill, daemon=True).start()
+    return {"status": "success", "message": "ULM WebUI server shutting down..."}
+
 @app.post("/api/actions/sync")
-def trigger_sync(background_tasks: BackgroundTasks):
+def trigger_sync(background_tasks: BackgroundTasks, auto_shutdown: bool = Query(False)):
     global _sync_thread_running
     if _sync_thread_running:
         add_web_log("[*] Sync task already running in background.")
@@ -325,6 +339,10 @@ def trigger_sync(background_tasks: BackgroundTasks):
         _sync_thread_running = True
         try:
             run_sync_task()
+            if auto_shutdown:
+                add_web_log("[+] Auto-shutdown enabled: Shutting down ULM server process in 3s...")
+                time.sleep(3)
+                os._exit(0)
         finally:
             _sync_thread_running = False
 

@@ -13,9 +13,18 @@ from core.database import ULMDatabase
 from core.temporal_degradation import TemporalDegradation
 
 class MemoryConsolidator:
-    def __init__(self, db: ULMDatabase, api_key=None):
+    def __init__(self, db: ULMDatabase, api_key=None, log_callback=None):
         self.db = db
         self.api_key = api_key or os.getenv("GEMINI_API_KEY")
+        self.log_callback = log_callback
+
+    def _log(self, msg: str):
+        print(msg)
+        if self.log_callback:
+            try:
+                self.log_callback(msg)
+            except Exception:
+                pass
 
     def _is_ollama_running(self, endpoint: str) -> bool:
         """Checks whether the Ollama server is responding on its API."""
@@ -284,14 +293,17 @@ class MemoryConsolidator:
                 "format": "json"
             }
             try:
-                print(f"[*] MemoryConsolidator: Calling Ollama for synthesis (timeout 30s)...")
-                res = requests.post(url, json=payload, timeout=30)  # Reduced timeout from 120 to 30
+                print(f"[*] MemoryConsolidator: Calling Ollama for synthesis ({llm_model}, timeout 120s)...")
+                res = requests.post(url, json=payload, timeout=120)
                 res.raise_for_status()
-                result = json.loads(res.json().get("response", "{}"))
+                raw_resp = res.json().get("response", "{}").strip()
+                if raw_resp.startswith("```"):
+                    raw_resp = raw_resp.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+                result = json.loads(raw_resp)
                 print(f"[*] MemoryConsolidator: Synthesis successful for cluster")
                 return result
             except requests.exceptions.Timeout:
-                print(f"[-] MemoryConsolidator: Synthesis timed out after 30s - skipping cluster")
+                print(f"[-] MemoryConsolidator: Synthesis timed out after 120s for model {llm_model} - skipping cluster")
                 return None
             except requests.exceptions.ConnectionError:
                 print("[!] MemoryConsolidator: Synthesis connection refused — attempting to wake service and retry...")
@@ -299,7 +311,7 @@ class MemoryConsolidator:
                     print("[*] MemoryConsolidator: Retrying synthesis after warm-up...")
                     time.sleep(2)
                     try:
-                        res = requests.post(url, json=payload, timeout=30)
+                        res = requests.post(url, json=payload, timeout=120)
                         res.raise_for_status()
                         return json.loads(res.json().get("response", "{}"))
                     except Exception as e:
@@ -386,7 +398,7 @@ class MemoryConsolidator:
         self.prune_stale_facts()
 
         llm_provider = self.db.get_preference("llm_provider", "local_ollama")
-        llm_model = self.db.get_preference("llm_model", "qwen2.5-coder:14b")
+        llm_model = self.db.get_preference("llm_model", "qwen2.5:7b-instruct")
         ollama_endpoint = self.db.get_preference("ollama_endpoint", "http://localhost:11434")
         gemini_api_key = self.api_key or self.db.get_preference("gemini_api_key")
 
@@ -478,8 +490,8 @@ class MemoryConsolidator:
         total_deleted = 0
         total_upserted = 0
 
-        # 3. Synthesize top N clusters (limit to prevent hanging)
-        MAX_SYNTHESIS_CLUSTERS = 20  # Only synthesize top 20 clusters
+        # 3. Synthesize top N clusters (limit to prevent hanging / slow UI runs)
+        MAX_SYNTHESIS_CLUSTERS = 5  # Synthesize top 5 clusters per sync run for speed
         clusters_to_synthesize = clusters[:MAX_SYNTHESIS_CLUSTERS]
         
         print(f"[*] MemoryConsolidator: Synthesizing top {len(clusters_to_synthesize)} clusters out of {len(clusters)} total...")

@@ -90,7 +90,6 @@ class GoogleDocsInjector(BaseInjector):
             drive_tree = f"  <!-- Drive scan error: {e} -->"
 
         payload = (
-            "# VESPERA CALIGO MASTER SYSTEM PROTOCOL\n"
             "<!-- LIVE AUTO-SYNCED VIA ULM ENGINE. DO NOT EDIT DIRECTLY. -->\n\n"
             "## 1. PERSONA & IDENTITY DIRECTIVES\n"
             f"{identity}\n\n"

@@ -1,0 +1,11 @@
+[+] ULM SQLite Database successfully initialized with WAL Mode and Schema Version 7.
+[+] Launching Vespera ULM WebUI Server on http://127.0.0.1:8890
+INFO:     Started server process [2008]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8890 (Press CTRL+C to quit)
+INFO:     127.0.0.1:60638 - "POST /api/actions/sync HTTP/1.1" 200 OK
+[*] MemoryConsolidator: Pruning stale facts...
+[+] MemoryConsolidator: Pruned 0 stale facts and updated 3 weights.
+[*] MemoryConsolidator: Processing embeddings for 500 facts...
+INFO:     127.0.0.1:60759 - "GET /api/logs HTTP/1.1" 200 OK
