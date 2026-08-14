@@ -512,22 +512,28 @@ async function updateDynamicBackground() {
 
             let rSum = 0, gSum = 0, bSum = 0, count = 0;
             for (let i = 0; i < data.length; i += 16) {
-                rSum += data[i];
-                gSum += data[i + 1];
-                bSum += data[i + 2];
-                count++;
+                if (data[i + 3] > 10) { // Ignore fully transparent pixels
+                    rSum += data[i];
+                    gSum += data[i + 1];
+                    bSum += data[i + 2];
+                    count++;
+                }
             }
-            const avgR = Math.round(rSum / count);
-            const avgG = Math.round(gSum / count);
-            const avgB = Math.round(bSum / count);
+            if (count > 0) {
+                const avgR = Math.round(rSum / count);
+                const avgG = Math.round(gSum / count);
+                const avgB = Math.round(bSum / count);
 
-            const primaryAccent = `rgb(${avgR}, ${avgG}, ${avgB})`;
-            const glowAccent = `rgba(${avgR}, ${avgG}, ${avgB}, 0.35)`;
+                if (!isNaN(avgR) && !isNaN(avgG) && !isNaN(avgB)) {
+                    const primaryAccent = `rgb(${avgR}, ${avgG}, ${avgB})`;
+                    const glowAccent = `rgba(${avgR}, ${avgG}, ${avgB}, 0.35)`;
 
-            document.documentElement.style.setProperty('--accent-purple', primaryAccent);
-            document.documentElement.style.setProperty('--border-glow', glowAccent);
+                    document.documentElement.style.setProperty('--accent-purple', primaryAccent);
+                    document.documentElement.style.setProperty('--border-glow', glowAccent);
+                }
+            }
         } catch (e) {
-            console.log('[DynamicBG] Palette extraction skipped.');
+            console.log('[DynamicBG] Palette extraction skipped:', e);
         }
     };
 

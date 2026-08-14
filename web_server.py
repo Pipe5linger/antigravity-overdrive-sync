@@ -26,6 +26,8 @@ db = ULMDatabase(db_path)
 db.initialize_db()
 
 frontend_dir = Path(__file__).resolve().parent / "frontend"
+if frontend_dir.exists():
+    app.mount("/static", StaticFiles(directory=str(frontend_dir)), name="static")
 
 # Live Event Log Buffer
 LOGS_BUFFER = ["WebUI Control Center initialized. Ready."]
@@ -272,29 +274,33 @@ def run_sync_task():
         unprofiled_count = len(unprofiled) if unprofiled else 0
         add_web_log(f"Found {unprofiled_count} unprofiled sessions.")
         if unprofiled:
-            # Cap evaluation to a small batch per sync cycle to prevent UI/Thread stall
             batch_limit = 5
             to_process = unprofiled[:batch_limit]
             add_web_log(f"Evaluating {len(to_process)} of {unprofiled_count} unprofiled sessions...")
-            count = 0
-            total = len(to_process)
-            for s_id in to_process:
-                count += 1
-                add_web_log(f"Profile: Evaluating session {count}/{total} ({s_id[:8]}...)")
-                try:
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-                    result = loop.run_until_complete(evaluator.evaluate_session(db, s_id))
-                    loop.close()
-                    if result:
-                        db.mark_session_profiled(s_id)
-                        add_web_log(f"Profile: Session {s_id[:8]} evaluated successfully.")
-                    else:
-                        add_web_log(f"Profile: Session {s_id[:8]} returned no results.")
-                except Exception as e:
-                    add_web_log(f"[-] Profile evaluation failed for session {s_id[:8]}: {e}")
-                if count % 5 == 0 or count == total:
-                    add_web_log(f"Profile Progress: Evaluated {count}/{total} sessions...")
+            
+            async def _batch_eval():
+                count = 0
+                total = len(to_process)
+                for s_id in to_process:
+                    count += 1
+                    add_web_log(f"Profile: Evaluating session {count}/{total} ({s_id[:8]}...)")
+                    try:
+                        result = await evaluator.evaluate_session(db, s_id)
+                        if result:
+                            db.mark_session_profiled(s_id)
+                            add_web_log(f"Profile: Session {s_id[:8]} evaluated successfully.")
+                        else:
+                            add_web_log(f"Profile: Session {s_id[:8]} returned no results.")
+                    except Exception as e:
+                        add_web_log(f"[-] Profile evaluation failed for session {s_id[:8]}: {e}")
+                    if count % 5 == 0 or count == total:
+                        add_web_log(f"Profile Progress: Evaluated {count}/{total} sessions...")
+                await evaluator.close()
+
+            try:
+                asyncio.run(_batch_eval())
+            except Exception as e:
+                add_web_log(f"[-] Profile batch evaluation error: {e}")
         
         add_web_log("Step 4/4: Running memory consolidation...")
         consolidator = MemoryConsolidator(db, log_callback=add_web_log)
