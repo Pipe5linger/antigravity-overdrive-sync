@@ -92,7 +92,7 @@ def backup_sqlite_to_yaml(db, engine):
 def main():
     register_plugins()
     parser = argparse.ArgumentParser(description="Universal Local Memory (ULM) Agent Pipeline")
-    parser.add_argument("command", nargs="?", choices=["sync", "get-context", "tui", "webui", "daemon", "search"], default="sync")
+    parser.add_argument("command", nargs="?", choices=["sync", "get-context", "tui", "webui", "daemon", "search", "recall"], default="sync")
     parser.add_argument("--query", "-q", type=str, help="Search query for memory database")
     parser.add_argument("--parser", choices=list(PARSERS.keys()), default="antigravity")
     parser.add_argument("--injector", choices=list(INJECTORS.keys()), default="gemini_md")
@@ -115,6 +115,30 @@ def main():
             return
         results = db.search_memory_db(query_text)
         print(json.dumps(results, indent=2))
+        return
+
+    if args.command == "recall":
+        query_text = args.query or " ".join(sys.argv[2:]) if len(sys.argv) > 2 else ""
+        if not query_text:
+            print("[-] Please specify a recall query using --query 'semantic question'")
+            return
+        from core.consolidator import MemoryConsolidator
+        consolidator = MemoryConsolidator(db)
+        query_vector = consolidator._get_embedding(query_text)
+        if not query_vector:
+            print("[-] Failed to generate embedding vector for recall query.")
+            return
+        matches = db.semantic_recall(query_vector=query_vector, limit=5, min_similarity=0.4)
+        print(f"\n🧠 Vespera Semantic Memory Recall | Query: '{query_text}'")
+        print("=" * 70)
+        if not matches:
+            print("[*] No matching facts found above threshold.")
+        else:
+            for i, r in enumerate(matches, 1):
+                score_pct = int(r["similarity"] * 100)
+                tag = f" [{r['project_tag']}]" if r.get("project_tag") else ""
+                print(f"[{i}] [Match: {score_pct}% | Category: {r['category'].upper()}{tag}]\n    {r['fact']}\n")
+        print("=" * 70)
         return
 
     if args.command == "get-context":

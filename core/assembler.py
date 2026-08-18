@@ -334,8 +334,8 @@ class DynamicPromptAssembler:
         header = "# VESPERA CALIGO MASTER SYSTEM PROTOCOL\n"
         return f"{header}{self.build_identity_header()}"
 
-    def get_sqlite_metrics(self, limit: int = 25) -> str:
-        """Fetch top developer‑profile metrics from the SQLite DB.
+    def get_sqlite_metrics(self, limit: int = 25, max_chars: int = 4000) -> str:
+        """Fetch top developer‑profile metrics from the SQLite DB within a strict token/character budget.
 
         The result is a markdown bullet list of ``name: description`` pairs
         ordered by confidence (descending). If the table is empty, a placeholder
@@ -347,7 +347,7 @@ class DynamicPromptAssembler:
                 conn.row_factory = sqlite3.Row
                 c = conn.cursor()
                 c.execute(
-                    "SELECT name, description FROM developer_profile ORDER BY confidence DESC LIMIT ?",
+                    "SELECT name, description FROM developer_profile ORDER BY confidence DESC, frequency DESC LIMIT ?",
                     (limit,)
                 )
                 rows = c.fetchall()
@@ -359,20 +359,29 @@ class DynamicPromptAssembler:
                     conn.execute("PRAGMA busy_timeout = 5000;")
                     c = conn.cursor()
                     c.execute(
-                        "SELECT name, description FROM developer_profile ORDER BY confidence DESC LIMIT ?",
+                        "SELECT name, description FROM developer_profile ORDER BY confidence DESC, frequency DESC LIMIT ?",
                         (limit,)
                     )
                     rows = c.fetchall()
             
             if not rows:
                 return "No developer metrics available."
-            lines = [f"- {row['name']}: {row['description']}" for row in rows]
+            
+            # Token Budget Filter: Ensure metrics don't blow out the system prompt
+            lines = []
+            cur_chars = 0
+            for row in rows:
+                line = f"- {row['name']}: {row['description']}"
+                if cur_chars + len(line) > max_chars and lines:
+                    break
+                lines.append(line)
+                cur_chars += len(line)
             return "\n".join(lines)
         except Exception as e:
             return f"<!-- Metrics query error: {e} -->"
 
-    def get_sqlite_facts(self, limit: int = 25) -> str:
-        """Fetch top semantic facts from the SQLite DB.
+    def get_sqlite_facts(self, limit: int = 25, max_chars: int = 4000) -> str:
+        """Fetch top semantic facts from the SQLite DB within a strict token/character budget.
 
         Returns a markdown bullet list of fact strings ordered by confidence.
         """
@@ -382,7 +391,7 @@ class DynamicPromptAssembler:
                 conn.row_factory = sqlite3.Row
                 c = conn.cursor()
                 c.execute(
-                    "SELECT fact FROM facts ORDER BY confidence DESC LIMIT ?",
+                    "SELECT fact FROM facts ORDER BY confidence DESC, last_seen DESC LIMIT ?",
                     (limit,)
                 )
                 rows = c.fetchall()
@@ -394,14 +403,23 @@ class DynamicPromptAssembler:
                     conn.execute("PRAGMA busy_timeout = 5000;")
                     c = conn.cursor()
                     c.execute(
-                        "SELECT fact FROM facts ORDER BY confidence DESC LIMIT ?",
+                        "SELECT fact FROM facts ORDER BY confidence DESC, last_seen DESC LIMIT ?",
                         (limit,)
                     )
                     rows = c.fetchall()
             
             if not rows:
                 return "No semantic facts available."
-            lines = [f"- {row['fact']}" for row in rows]
+            
+            # Token Budget Filter
+            lines = []
+            cur_chars = 0
+            for row in rows:
+                line = f"- {row['fact']}"
+                if cur_chars + len(line) > max_chars and lines:
+                    break
+                lines.append(line)
+                cur_chars += len(line)
             return "\n".join(lines)
         except Exception as e:
             return f"<!-- Facts query error: {e} -->"
