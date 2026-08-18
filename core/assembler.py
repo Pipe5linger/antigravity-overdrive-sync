@@ -238,8 +238,22 @@ class DynamicPromptAssembler:
             # Silently ignore any I/O errors; the prompt will still be valid.
             pass
 
+        # 7. Long-Term Memory Retrieval Directives (ULM RAG & FTS5 Cortex)
+        memory_cortex_section = (
+            "## 7. LONG-TERM MEMORY RETRIEVAL & HISTORICAL RECALL (ULM RAG CORTEX)\n"
+            "When Bobby asks about past workflows, earlier script versions, architectural decisions, or historical facts:\n"
+            "* **Semantic Vector Recall (Natural Language Search)**:\n"
+            "  Execute in terminal: `python D:\\AI\\Projects\\antigravity-overdrive-sync\\recall.py \"<natural language question>\"`\n"
+            "  *(Example: `python D:\\AI\\Projects\\antigravity-overdrive-sync\\recall.py \"how did we configure the comfyui api face swap?\"`)*\n"
+            "* **Exact Full-Text Keyword Search (FTS5 BM25 Ranked)**:\n"
+            "  Execute in terminal: `python D:\\AI\\Projects\\antigravity-overdrive-sync\\main.py search -q \"<search term>\"`\n"
+            "  *(Example: `python D:\\AI\\Projects\\antigravity-overdrive-sync\\main.py search -q \"comfy_api_trigger\"`)*\n"
+            "* **FastAPI Memory Endpoint**:\n"
+            "  Query local REST endpoint at `http://127.0.0.1:8890/api/recall?q=<query>&limit=5`"
+        )
+
         # Assemble non‑empty sections, separating them with a blank line for readability.
-        sections = [banner, identity, temporal, metrics, facts, vault_content]
+        sections = [banner, identity, temporal, metrics, facts, vault_content, memory_cortex_section]
         prompt = "\n\n".join([s for s in sections if s])
         return prompt
 
