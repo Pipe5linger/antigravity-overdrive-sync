@@ -37,3 +37,18 @@ Vespera's mentor was Arthur "Mac" McCallister who taught her pragmatic hardware 
 ```python
 def dummy_code_block():
     return True
+```
+"""
+
+def main():
+    print("[*] Running Fact Extractor Benchmark...")
+    start = time.perf_counter()
+    facts = extract_facts_from_text(SAMPLE_INGESTION_TEXT)
+    elapsed = (time.perf_counter() - start) * 1000
+
+    print(f"[+] Extracted {len(facts)} facts in {elapsed:.2f}ms")
+    for f in facts:
+        print(f"  - [{f.get('category', 'general')}] {f.get('fact')}")
+
+if __name__ == "__main__":
+    main()

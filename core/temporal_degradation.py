@@ -50,6 +50,11 @@ class TemporalDegradation:
         timestamp = fact.get("created_at")
         if timestamp is None:
             timestamp = datetime.now(timezone.utc).timestamp()
+        elif isinstance(timestamp, str):
+            try:
+                timestamp = datetime.fromisoformat(timestamp.replace("Z", "+00:00")).timestamp()
+            except ValueError:
+                timestamp = datetime.now(timezone.utc).timestamp()
         
         new_weight = self.calculate_weight(initial_weight, timestamp)
         delete_fact = self.should_delete(new_weight)

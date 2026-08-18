@@ -1,6 +1,5 @@
 import os
 import json
-import chromadb
 from datetime import datetime
 from pathlib import Path
 from parsers.base import BaseParser
@@ -189,6 +188,12 @@ class AntigravityParser(BaseParser):
     def ingest_payloads(self, extracted_payloads, llm_model):
         if not extracted_payloads:
             print("[*] No new payloads to ingest.")
+            return
+
+        try:
+            import chromadb
+        except ImportError:
+            print("[!] Optional chromadb module not found. Skipping ChromaDB vector indexing.")
             return
 
         print(f"[*] Starting ingestion of {len(extracted_payloads)} payloads to ChromaDB...")

@@ -35,6 +35,7 @@ dependencies = [
 [project.optional-dependencies]
 test = [
     "unittest-xml-reporting",
+    "pytest",
 ]
 
 [project.scripts]
@@ -43,3 +44,7 @@ ulm = "main:main"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["core*", "injectors*", "normalizers*", "parsers*", "tui*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

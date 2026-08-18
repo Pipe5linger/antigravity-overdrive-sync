@@ -185,6 +185,26 @@ class ULMDatabase:
                     """)
                     c.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (7)")
 
+                if current_version < 8:
+                    # Phase 3 Performance: Critical secondary indexes
+                    index_statements = [
+                        "CREATE INDEX IF NOT EXISTS idx_messages_session_id ON messages(session_id)",
+                        "CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at)",
+                        "CREATE INDEX IF NOT EXISTS idx_sessions_profiled_at ON sessions(profiled_at)",
+                        "CREATE INDEX IF NOT EXISTS idx_sessions_updated_at ON sessions(updated_at)",
+                        "CREATE INDEX IF NOT EXISTS idx_facts_project_tag ON facts(project_tag)",
+                        "CREATE INDEX IF NOT EXISTS idx_facts_last_seen ON facts(last_seen)",
+                        "CREATE INDEX IF NOT EXISTS idx_facts_category ON facts(category)",
+                        "CREATE INDEX IF NOT EXISTS idx_developer_profile_confidence ON developer_profile(confidence)",
+                        "CREATE INDEX IF NOT EXISTS idx_fact_embeddings_fact_id ON fact_embeddings(fact_id)",
+                    ]
+                    for stmt in index_statements:
+                        try:
+                            c.execute(stmt)
+                        except sqlite3.OperationalError:
+                            pass
+                    c.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (8)")
+
                 # Always ensure profiled_at column exists (safe migration)
                 try:
                     c.execute("ALTER TABLE sessions ADD COLUMN profiled_at TEXT;")
@@ -192,7 +212,9 @@ class ULMDatabase:
                     pass  # Column already exists
                 
                 conn.commit()
-            print(f"[+] ULM SQLite Database successfully initialized with WAL Mode and Schema Version {current_version if current_version >= 7 else 7}.")
+            c.execute("SELECT version FROM schema_version")
+            final_version = c.fetchone()[0]
+            print(f"[+] ULM SQLite Database successfully initialized with WAL Mode and Schema Version {final_version}.")
         except sqlite3.Error as e:
             print(f"[-] Error initializing database: {e}")
 
@@ -565,3 +587,64 @@ class ULMDatabase:
         except sqlite3.Error as e:
             print(f"[-] Error searching memory database: {e}")
         return results
+
+    def semantic_recall(self, query_vector: list, limit: int = 5, min_similarity: float = 0.5):
+        """Retrieves the top-k most semantically relevant facts using cosine similarity against fact_embeddings."""
+        import struct
+        import math
+
+        def cosine_sim(v1, v2):
+            dot = sum(a * b for a, b in zip(v1, v2))
+            norm1 = math.sqrt(sum(a * a for a in v1))
+            norm2 = math.sqrt(sum(b * b for b in v2))
+            if norm1 == 0 or norm2 == 0:
+                return 0.0
+            return dot / (norm1 * norm2)
+
+        try:
+            with self.get_connection() as conn:
+                conn.row_factory = sqlite3.Row
+                c = conn.cursor()
+                c.execute("""
+                    SELECT fe.fact_id, fe.embedding, f.fact, f.category, f.confidence, f.project_tag
+                    FROM fact_embeddings fe
+                    JOIN facts f ON fe.fact_id = f.fact_id
+                """)
+                rows = c.fetchall()
+                
+                scored = []
+                for row in rows:
+                    raw_blob = row["embedding"]
+                    num_floats = len(raw_blob) // 4
+                    vec = struct.unpack(f"{num_floats}f", raw_blob)
+                    sim = cosine_sim(query_vector, vec)
+                    if sim >= min_similarity:
+                        scored.append({
+                            "fact_id": row["fact_id"],
+                            "fact": row["fact"],
+                            "category": row["category"],
+                            "confidence": row["confidence"],
+                            "project_tag": row["project_tag"],
+                            "similarity": round(sim, 4)
+                        })
+                
+                scored.sort(key=lambda x: x["similarity"], reverse=True)
+                return scored[:limit]
+        except Exception as e:
+            print(f"[-] Error executing semantic recall: {e}")
+            return []
+
+    def cleanup_orphan_embeddings(self):
+        """Removes embedding cache entries for facts that no longer exist."""
+        try:
+            with self.get_connection() as conn:
+                c = conn.cursor()
+                c.execute("DELETE FROM fact_embeddings WHERE fact_id NOT IN (SELECT fact_id FROM facts WHERE fact_id IS NOT NULL)")
+                deleted = c.rowcount
+                conn.commit()
+                if deleted > 0:
+                    print(f"[+] Cleaned up {deleted} orphaned embedding cache entries.")
+                return deleted
+        except sqlite3.Error as e:
+            print(f"[-] Error cleaning orphan embeddings: {e}")
+            return 0

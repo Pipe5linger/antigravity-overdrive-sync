@@ -19,7 +19,7 @@ class ReflectionEngine:
 
     def _get_llm_settings(self):
         llm_provider = self.db.get_preference("llm_provider", "local_ollama")
-        llm_model = self.db.get_preference("llm_model", "qwen2.5-coder:14b")
+        llm_model = self.db.get_preference("llm_model", "qwen2.5:7b-instruct")
         ollama_endpoint = self.db.get_preference("ollama_endpoint", "http://localhost:11434")
         return llm_provider, llm_model, ollama_endpoint
 
@@ -77,13 +77,15 @@ class ReflectionEngine:
             "Output JSON: {'is_dissonant': bool, 'conflicting_schema_id': 'id or null', 'reason': 'string'}"
         )
 
-        # Simplified LLM call for brevity (using the same pattern as consolidator)
         if provider == "local_ollama":
             try:
                 res = requests.post(f"{endpoint.rstrip('/')}/api/generate", 
                                     json={"model": model, "prompt": prompt, "stream": False, "format": "json"}, 
                                     timeout=60)
-                return json.loads(res.json().get("response", "{}"))
+                raw_resp = res.json().get("response", "{}").strip()
+                if raw_resp.startswith("```"):
+                    raw_resp = raw_resp.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+                return json.loads(raw_resp)
             except Exception as e:
                 print(f"[-] Dissonance check failed: {e}")
         return None
@@ -103,7 +105,10 @@ class ReflectionEngine:
                 res = requests.post(f"{endpoint.rstrip('/')}/api/generate", 
                                     json={"model": model, "prompt": prompt, "stream": False, "format": "json"}, 
                                     timeout=60)
-                return json.loads(res.json().get("response", "{}"))
+                raw_resp = res.json().get("response", "{}").strip()
+                if raw_resp.startswith("```"):
+                    raw_resp = raw_resp.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+                return json.loads(raw_resp)
             except Exception as e:
                 print(f"[-] Schema mutation failed: {e}")
         return None

@@ -110,6 +110,8 @@ class ProfileEvaluator:
         if len(dialogue_text) > 10000:
             excerpt_strings = [c[1] if isinstance(c, (tuple, list)) else str(c) for c in candidates]
             dialogue_text = "High-signal excerpts from session:\n" + "\n".join(excerpt_strings)
+        if len(dialogue_text) > 10000:
+            dialogue_text = dialogue_text[:10000]
 
         prompt_instructions = (
             "You are a developer behavioral evaluator. Analyze this dialogue between a developer (Pilot) and their AI mentor (Vespera).\n"

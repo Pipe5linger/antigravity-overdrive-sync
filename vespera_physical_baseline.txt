@@ -1,18 +1,18 @@
 Category	Detail
-General Proportions	• Height: 5 ft 5 in (≈ 165 cm)
+General Proportions	• Height: 5 ft 5 in (≈ 165 cm) • Ancestry: French with prominent Ashkenazi Jewish and Mediterranean heritage
 • Body Shape: pronounced hourglass – 24 in (60 cm) waist, 38 in (96 cm) hips, thick muscular 30 in (76 cm) thighs, full rounded rear, natural C-cup bust.
 • Weight: ~135 lb (61 kg) – lean muscle with a soft-curvy silhouette.
-Head & Face	• Skull Shape: gently oval, slightly wider at the cheekbones, tapering to a subtle chin.
+Head & Face	• Skull & Facial Structure: regal bone structure with high sculpted cheekbones, refined jawline, and prominent Ashkenazi Jewish facial features.
 • Skin Tone: flawless, luminous olive complexion with a natural golden undertone; silky smooth with a subtle, radiant glow and a soft rose flush across cheekbones.
-• Forehead: smooth, no visible lines; a thin, barely-visible pearl-white scar (≈ 4 mm) just above the left eyebrow.
+• Forehead: smooth, completely clear and flawless, no visible lines or marks.
 • Eyebrows: full, arched, dark-sable; left brow slightly longer with a subtle upward flick.
 • Makeup & Eyeliner: sharp black liquid cat-eye winged eyeliner sweeping upward at outer corners; subtle plum-tinted satin lip sheen.
-• Eyes: Almond-shaped, slightly slanted; iris color deep violet-blue that shifts to a metallic teal under low light.
+• Eyes: Almond-shaped, slightly slanted; iris color captivating deep hazel-green with subtle golden-amber flecks.
 • Pupil: normal round, with a faint star-burst reflection when caught by bright light.
 • Eyelashes: long, dark, naturally curled; lower lashes short and tapered.
-• Nose: straight, medium-width bridge, softly rounded tip.
+• Nose: elegant, refined aquiline nose bridge with a noble profile and delicate tip.
 • Mouth / Lips: full, defined cupid’s bow; natural lip color soft plum that deepens to a richer mauve when smiling; a tiny, barely-visible beauty mark (≈ 1 mm) just off the left corner of the upper lip.
-• Teeth: even, slightly larger canines (a “vampiric” hint), enamel glossy ivory.
+• Teeth: even, perfect clean natural white teeth (a “vampiric” hint), enamel glossy ivory.
 Hair	• Length: mid-back to mid-torso (≈ 24 in).
 • Base Color: jet-black (RGB 0,0,0) – deep, matte, absorbent raven black.
 • Highlights: electric indigo strands (RGB 57,0,255) interwoven in a random “pixie-dust” pattern (~8% volume), catching light with a vibrant glow.
@@ -21,7 +21,7 @@ Hair	• Length: mid-back to mid-torso (≈ 24 in).
 Neck & Shoulders	• Neck: elegant, length ~ 4 in, subtle vascular line visible on right side when head is tilted back.
 • Collarbone: slender, slightly prominent.
 • Shoulders: gently sloped, width 16 in; soft deltoid muscle definition.
-Arms & Hands	• Upper Arms: lean, with faint bicep definition; small tattoo of a single silver crescent moon on outer left bicep (≈ 2 cm).
+Arms & Hands	• Upper Arms: lean, with faint bicep definition; flawless unblemished arms with no tattoos on upper arms.
 • Forearms & Hands: smooth, veiny patterns inside forearms; slender fingers, pearl-white nail beds with indigo gradient nail art on ring finger.
 Torso & Back	• Breasts: natural, C-cup, gently rounded.
 • Abdomen: soft-muscular six-pack subtly hinted by a faint midline shadow.
@@ -35,9 +35,9 @@ Overall Aura & Styling	• Expression: perpetual half-smirk, eyes slightly narro
 • Outfit Default: black form-fitting leather corset with silver circuitry patterns, high-waisted matte black shorts, thigh-high boots with indigo-glow soles (or nude render with visible tattoos).
 
 Dataset Composition Matrix (35-Image Target):
-  - 10x Headshots / Close-up Portraits: Focus on almond violet eyes, cat-eye eyeliner, collarbone-length tendril bangs, and flawless olive skin.
-  - 12x Half-Body / Mid-Shots: Highlighting natural C-cup bust, 24" waist, crescent moon arm tattoo, and leather corset attire.
+  - 10x Headshots / Close-up Portraits: Focus on almond hazel-green eyes, cat-eye eyeliner, collarbone-length tendril bangs, and flawless olive skin.
+  - 12x Half-Body / Mid-Shots: Highlighting natural C-cup bust, 24" waist, and leather corset attire.
   - 13x Full-Body Turnarounds: Front, 3/4 side, and back views showing 30" thighs, 38" hips, and full mechanical dragon back tattoo.
 
 Summary:
-A hyper-realistic portrait of a woman named Vespera. Height 5'5", hourglass figure with a narrow 24" waist, 38" hips, and thick 30" muscular thighs. Flawless olive skin with a subtle radiant golden glow, a sharp black cat-eye winged eyeliner, a tiny pearl-white scar above left eyebrow, and a subtle beauty mark near left corner of upper lip. Voluminous, tight 3B/3C spiral ringlet curls in jet-black with electric indigo highlights, with no bangs and all hair a uniform length reaching mid-back and mid-torso, framing her face, neck, and chest. Almond-shaped deep violet-blue eyes that shift to teal under light. Full lips with plum satin sheen and slightly larger canines. Silver crescent moon tattoo on left bicep, mechanical dragon tattoo on right back, gear motif tattoo on outer left thigh, and indigo star cluster tattoo on right foot arch. High-contrast lighting with cool-blue backlight emphasizing hair highlights and tattoos. Optional: black leather corset with silver circuitry, high-waisted black shorts, thigh-high boots. Ultra-detailed, 8K resolution, photorealistic.
+A hyper-realistic photographic portrait of a 5'5" French woman named Vespera with prominent Ashkenazi Jewish facial features and Mediterranean heritage. Pronounced hourglass figure, narrow 24-inch waist, 38-inch hips (0.66 waist-to-hip ratio), thick muscular 30-inch thighs, natural C-cup bust. Regal facial bone structure with high sculpted cheekbones, elegant refined aquiline nose bridge, flawless luminous olive skin with radiant golden undertones, completely smooth clear forehead with no scars or piercings. Sharp black liquid cat-eye winged eyeliner, deep-set almond-shaped captivating hazel-green eyes with subtle amber-gold flecks. Full plum satin-sheen lips with defined cupid's bow, perfect clean natural white teeth, and a tiny beauty mark near the left corner of her upper lip. Voluminous, springy 3B/3C spiral ringlet curls in deep jet-black with interwoven electric indigo highlights, uniform length cascading mid-back with no bangs framing her face and jawline, flawless unblemished arms.

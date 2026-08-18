@@ -336,6 +336,20 @@ def search_memory(q: str = Query(...), limit: int = Query(15)):
     results = db.search_memory_db(query_term=q, limit=limit)
     return {"status": "success", "data": results}
 
+@app.get("/api/recall")
+def semantic_recall_endpoint(q: str = Query(...), limit: int = Query(5), min_similarity: float = Query(0.5)):
+    """Semantic vector RAG retrieval endpoint: embeds query text and returns most relevant facts."""
+    try:
+        from core.consolidator import MemoryConsolidator
+        consolidator = MemoryConsolidator(db)
+        query_vector = consolidator._get_embedding(q)
+        if not query_vector:
+            return {"status": "error", "message": "Failed to generate embedding for query", "data": []}
+        results = db.semantic_recall(query_vector=query_vector, limit=limit, min_similarity=min_similarity)
+        return {"status": "success", "query": q, "count": len(results), "data": results}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/api/actions/shutdown")
 def shutdown_webui_server():
     """Shuts down the ULM WebUI server process cleanly."""

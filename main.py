@@ -9,8 +9,8 @@ from pathlib import Path
 # Enforce UTF-8 terminal piping on Windows
 if sys.platform.startswith("win"):
     try:
-        sys.stdout.reconfigure(encoding='utf-8')
-        sys.stderr.reconfigure(encoding='utf-8')
+        sys.stdout.reconfigure(encoding='utf-8', line_buffering=True)
+        sys.stderr.reconfigure(encoding='utf-8', line_buffering=True)
     except AttributeError:
         pass
 
@@ -115,6 +115,26 @@ def main():
             return
         results = db.search_memory_db(query_text)
         print(json.dumps(results, indent=2))
+        return
+
+    if args.command == "get-context":
+        limit = 10
+        context = db.get_recent_context(limit=limit)
+        if not context:
+            print("[-] No recent context found in memory database.")
+            return
+        print(f"[+] Recent Context Window ({len(context)} messages):\n")
+        for session_id, role, content, created_at in context:
+            tag = "👤 Pilot" if role in ["Pilot", "user", "USER_INPUT"] else "🤖 Vespera"
+            preview = content[:200].replace("\n", " ") if content else ""
+            print(f"  [{created_at}] {tag}: {preview}...")
+        
+        # Also output top facts
+        facts = db.get_facts(limit=10)
+        if facts:
+            print(f"\n[+] Top {len(facts)} Active Facts:")
+            for f in facts:
+                print(f"  • ({f['category']}, conf={f['confidence']:.2f}) {f['fact'][:100]}")
         return
 
     if args.command == "webui":

@@ -108,6 +108,17 @@ class MemoryConsolidator:
         if llm_provider != "local_ollama":
             return [[] for _ in texts]
 
+        if not self._ensure_ollama_ready(ollama_endpoint):
+            print("[-] MemoryConsolidator: Could not connect to Ollama for batch embeddings.")
+            return [[] for _ in texts]
+
+        available_models = self._get_available_ollama_models(base)
+        if available_models and vector_model not in available_models:
+            embed_models = [m for m in available_models if "embed" in m.lower() or "minilm" in m.lower()]
+            if embed_models:
+                vector_model = embed_models[0]
+                print(f"[*] MemoryConsolidator: Using detected embedding model for batch: {vector_model}")
+
         all_embeddings = []
         
         # Process in batches to avoid overwhelming Ollama
@@ -121,9 +132,9 @@ class MemoryConsolidator:
                 data = res.json()
                 batch_embeddings = data.get("embeddings", [])
                 all_embeddings.extend(batch_embeddings)
-                print(f"[*] MemoryConsolidator: Batch embedded {len(batch)} texts ({i+len(batch)}/{len(texts)})")
+                print(f"[*] MemoryConsolidator: Batch embedded {len(batch)} texts ({min(i+len(batch), len(texts))}/{len(texts)})")
             except Exception as e:
-                print(f"[-] MemoryConsolidator: Batch embedding failed: {e}, falling back to sequential...")
+                print(f"[-] MemoryConsolidator: Batch embedding chunk failed: {e}")
                 # Fallback to sequential for this batch
                 for text in batch:
                     emb = self._get_embedding(text)
@@ -238,14 +249,13 @@ class MemoryConsolidator:
                     continue
                 fact2 = valid_facts[j]
                 
-                # Quick category match first
-                if fact1.get("category") == fact2.get("category"):
+                MAX_CLUSTER_SIZE = 12
+                # Check embedding similarity
+                if self._cosine_similarity(fact1["embedding"], fact2["embedding"]) > threshold:
                     cluster.append(fact2)
                     used.add(j)
-                # Then check embedding similarity
-                elif self._cosine_similarity(fact1["embedding"], fact2["embedding"]) > threshold:
-                    cluster.append(fact2)
-                    used.add(j)
+                    if len(cluster) >= MAX_CLUSTER_SIZE:
+                        break
             
             if len(cluster) > 1:  # Only keep clusters with 2+ facts
                 clusters.append(cluster)
@@ -508,22 +518,28 @@ class MemoryConsolidator:
                 
                 result = self._synthesize_cluster(cluster, llm_provider, llm_model, ollama_endpoint, gemini_api_key)
                 if result and "golden_fact" in result:
+                    merged_ids = result.get('merged_ids', [f['fact_id'] for f in cluster])
+                    if not merged_ids or not isinstance(merged_ids, list):
+                        merged_ids = [f['fact_id'] for f in cluster]
                     # Apply the Golden Truth
                     try:
                         with self.db.get_connection() as conn:
                             c = conn.cursor()
                             # Delete merged facts
-                            for fid in result["merged_ids"]:
+                            for fid in merged_ids:
                                 c.execute("DELETE FROM facts WHERE fact_id = ?", (fid,))
                                 total_deleted += 1
                             
                             # Preserve project_tag from first merged fact if present
                             cluster_tag = cluster[0].get("project_tag") if cluster else None
+                            import hashlib
+                            golden_fact_id = hashlib.sha256(result['golden_fact'].strip().lower().encode('utf-8')).hexdigest()[:16]
                             # Upsert the Golden Fact
                             c.execute("""
-                                INSERT INTO facts (fact, category, confidence, last_seen, project_tag) 
-                                VALUES (?, ?, ?, ?, ?)
-                            """, (result["golden_fact"], result["category"], result["confidence"], datetime.datetime.now().isoformat(), cluster_tag))
+                                INSERT OR REPLACE INTO facts (fact_id, fact, category, confidence, first_seen, last_seen, project_tag, weight, pinned, created_at)
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            """, (golden_fact_id, result['golden_fact'], result['category'], result['confidence'], 
+                                  datetime.datetime.now().isoformat(), datetime.datetime.now().isoformat(), cluster_tag, 1.0, 0, datetime.datetime.now().isoformat()))
                             total_upserted += 1
                             conn.commit()
                     except Exception as e:
@@ -535,6 +551,18 @@ class MemoryConsolidator:
                 import traceback
                 traceback.print_exc()
                 continue  # Skip this cluster and continue with others
+
+        # 4. Trigger Reflection Engine (Cognitive Mirror: evolve persona schemas based on consolidated facts)
+        try:
+            from core.reflection import ReflectionEngine
+            recent_facts = self.db.get_facts(limit=10)
+            if recent_facts:
+                reflection_engine = ReflectionEngine(self.db)
+                mutations = reflection_engine.reflect_on_facts(recent_facts)
+                if mutations:
+                    print(f"[+] ReflectionEngine: Successfully processed {len(mutations)} persona schema mutations.")
+        except Exception as e:
+            print(f"[-] ReflectionEngine: Cognitive mirror reflection error: {e}")
 
         print(f"[+] MemoryConsolidator: Consolidation complete! Deleted {total_deleted} facts, upserted {total_upserted} golden facts")
         return total_deleted, total_upserted
