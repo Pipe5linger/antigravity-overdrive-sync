@@ -177,6 +177,20 @@ class GoogleDocsInjector(BaseInjector):
             except Exception as e_docx:
                 print(f"[-] docx export warning: {e_docx}")
 
+            # 3. Export Standalone Self-Contained SQLite Database (.db) directly to Google Drive
+            try:
+                import sqlite3
+                gdrive_db_path = target_path.with_name("Vespera_Memory_Database.db")
+                with db.get_connection() as src_conn:
+                    src_conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
+                    # Create clean standalone backup copy with all WAL data baked in
+                    dst_conn = sqlite3.connect(str(gdrive_db_path))
+                    src_conn.backup(dst_conn)
+                    dst_conn.close()
+                print(f"[+] Synced standalone self-contained SQLite DB for Gemini Web: {gdrive_db_path}")
+            except Exception as e_db:
+                print(f"[-] DB snapshot export warning: {e_db}")
+
             success = True
         except Exception as e:
             print(f"[-] Failed writing local file: {e}")

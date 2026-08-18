@@ -314,7 +314,12 @@ def run_sync_task():
         copilot_injector = CopilotInjector()
         copilot_injector.inject(db, dry_run=False)
         
-        add_web_log("[+] ULM Sync & Reinjection completed successfully!")
+        # Inject Google Docs / Google Drive files (.md, .txt, .docx + Webhook)
+        from injectors.google_docs import GoogleDocsInjector
+        google_docs_injector = GoogleDocsInjector()
+        google_docs_injector.inject(db, dry_run=False)
+        
+        add_web_log("[+] ULM Sync & Reinjection completed successfully across GEMINI.md, Copilot, and Google Docs!")
 
         # Purge VRAM and terminate Ollama process if local provider was used
         from core.utils import shutdown_ollama

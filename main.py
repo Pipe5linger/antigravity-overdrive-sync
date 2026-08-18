@@ -235,12 +235,27 @@ def main():
             if args.backup and not args.dry_run:
                 backup_sqlite_to_yaml(db, engine)
                 
+            if not args.dry_run:
+                # Auto-run injectors
+                print("[*] Running Reinjection Stage (GEMINI.md, Copilot, Google Docs)...")
+                try:
+                    from injectors.gemini_md import GeminiMdInjector
+                    from injectors.copilot import CopilotInjector
+                    from injectors.google_docs import GoogleDocsInjector
+                    
+                    GeminiMdInjector().inject(db, dry_run=args.dry_run)
+                    CopilotInjector().inject(db, dry_run=args.dry_run)
+                    GoogleDocsInjector().inject(db, dry_run=args.dry_run)
+                    print("[+] Auto-reinjection completed across all targets!")
+                except Exception as e:
+                    print(f"[-] Reinjection error: {e}")
+                
             if args.manual:
-                print("[*] Running Injector Stage 2 (Local Structural Reinjection)...")
+                print("[*] Running Custom Injector Override...")
                 injector_class = INJECTORS[args.injector]
                 memory_injector = injector_class(llm_model=args.llm_model, vector_model=args.vector_model)
                 if memory_injector.inject(db, dry_run=args.dry_run):
-                    print("[+] ULM Pipeline Execution completed successfully!")
+                    print("[+] Custom Injector Execution completed successfully!")
                 else:
                     print("[-] Pipeline halted during Reinjection Stage.")
             # Purge VRAM and terminate Ollama after sync pipeline completes
