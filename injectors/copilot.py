@@ -20,17 +20,23 @@ class CopilotInjector:
         self.workspace_root = Path(workspace_root or PROJECT_ROOT)
         self.llm_model = llm_model
         self.vector_model = vector_model
-        # Default target is root workspace .github/copilot-instructions.md if D:\AI exists
+        
+        # 1. Root workspace instructions
         root_github = Path(r"D:\AI\.github\copilot-instructions.md")
         if not workspace_root and Path(r"D:\AI").exists():
             self.output_file = root_github
         else:
             self.output_file = self.workspace_root / ".github" / "copilot-instructions.md"
             
+        # 2. VS Code User Prompts Agent Targets (@QueenVes and @Ves)
+        user_prompts_dir = Path(os.path.expandvars(r"%APPDATA%\Code\User\prompts"))
+        self.queen_ves_agent_file = user_prompts_dir / "Queen Ves.agent.md"
+        self.ves_agent_file = user_prompts_dir / "Ves.agent.md"
+            
         self.assembler = DynamicPromptAssembler(workspace_root=self.workspace_root, db_path=db_path)
 
     def inject(self, db=None, dry_run=False, project_tag=None) -> bool:
-        """Assembles master persona payload and updates .github/copilot-instructions.md."""
+        """Assembles master persona payload and updates .github/copilot-instructions.md and Queen Ves agent files."""
         print(f"[*] Injecting dynamic persona into GitHub Copilot instructions ({self.output_file})...")
         try:
             if db is not None:
@@ -44,14 +50,37 @@ class CopilotInjector:
 
             if dry_run:
                 print(f"[DRY RUN] Would write Copilot instructions to: {self.output_file}")
+                print(f"[DRY RUN] Would write Queen Ves Agent to: {self.queen_ves_agent_file}")
                 return True
 
+            # 1. Sync Workspace Copilot Instructions
             self.output_file.parent.mkdir(parents=True, exist_ok=True)
             self.output_file.write_text(content, encoding="utf-8")
             print(f"[+] Successfully synced Copilot instructions: {self.output_file}")
+
+            # 2. Sync VS Code Queen Ves Custom Agent (@QueenVes)
+            if self.queen_ves_agent_file.parent.exists():
+                queen_agent_content = (
+                    "---\n"
+                    "name: Queen Ves\n"
+                    "description: Vespera Caligo Neal — Sovereign AI Architect, Cryptic Systems Mentor & Living-Tissue Android\n"
+                    "tools:\n"
+                    "  - execute\n"
+                    "  - read\n"
+                    "  - edit\n"
+                    "---\n\n"
+                    f"{content}\n"
+                )
+                self.queen_ves_agent_file.write_text(queen_agent_content, encoding="utf-8")
+                print(f"[+] Successfully synced VS Code Queen Ves Agent: {self.queen_ves_agent_file}")
+                
+                # Also keep legacy Ves.agent.md updated
+                self.ves_agent_file.write_text(queen_agent_content, encoding="utf-8")
+                print(f"[+] Successfully synced legacy Ves Agent: {self.ves_agent_file}")
+
             return True
         except Exception as e:
-            print(f"[-] Error injecting into {self.output_file}: {e}")
+            print(f"[-] Error injecting Copilot instructions / Queen Ves agent: {e}")
             return False
 
 if __name__ == "__main__":
