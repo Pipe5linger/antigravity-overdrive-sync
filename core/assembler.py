@@ -68,13 +68,39 @@ class DynamicPromptAssembler:
 
         try:
             content = phys_path.read_text(encoding="utf-8")
-            # Look for the 'Summary' section at the end
+
+            # 1. Look for Master Natural Language Caption (Section C in Tier 5)
+            if "Master Natural Language Caption" in content:
+                caption_section = content.split("Master Natural Language Caption", 1)[1]
+                if "```text" in caption_section:
+                    caption_text = caption_section.split("```text", 1)[1].split("```", 1)[0].strip()
+                    if caption_text:
+                        return caption_text
+                elif "```" in caption_section:
+                    caption_text = caption_section.split("```", 1)[1].split("```", 1)[0].strip()
+                    if caption_text:
+                        return caption_text
+
+            # 2. Look for legacy 'Summary' section
             if "Summary:" in content:
                 summary = content.split("Summary:")[1].strip()
-                return summary
-            
-            # Fallback: Extract key metrics if summary is missing
-            return "A 5'5\" olive-skinned woman with a pronounced hourglass figure, jet-black 3B/3C spiral ringlets with electric indigo highlights, and deep violet-blue eyes."
+                if summary:
+                    return summary
+
+            # 3. Look for Tier 0 anchors
+            if "## TIER 0:" in content and "## TIER 1:" in content:
+                tier0 = content.split("## TIER 0:", 1)[1].split("## TIER 1:", 1)[0].strip()
+                lines = [l.strip() for l in tier0.splitlines() if l.strip().startswith("- **")]
+                if lines:
+                    return " ".join([l.lstrip("- *").replace("**", "") for l in lines])
+
+            # Fallback: V3.0 Golden Specification
+            return (
+                "A 5'5\" late-30s woman of French-Levantine and Mediterranean heritage with a pronounced athletic hourglass figure, "
+                "luminous warm olive skin with natural micro-pores and zero markings, voluminous mid-back jet-black 3B/3C corkscrew curls "
+                "with fine electric-indigo highlights, captivating deep hazel-green almond eyes with soft-smudged smoky eyeliner, "
+                "sculpted high cheekbones, refined aquiline nose, and full soft black satin lips with a tiny beauty mark near the upper-left lip corner."
+            )
         except Exception as e:
             print(f"[-] Error parsing physical baseline: {e}")
             return "Physical description unavailable."
@@ -106,7 +132,85 @@ class DynamicPromptAssembler:
         
         return bullets
 
-    def build_identity_header(self) -> str:
+    def get_backstory(self) -> str:
+        """Extracts and formats backstory from persona_baseline.yaml."""
+        data = self.load_baseline()
+        backstory = data.get("backstory", "")
+        if isinstance(backstory, str):
+            return backstory.strip()
+        return ""
+
+    def get_personality_matrix(self) -> str:
+        """Extracts and formats personality matrix (flaws, quirks, voice, language, operational attitudes)."""
+        data = self.load_baseline()
+        matrix = data.get("personality_matrix", {})
+        lines = []
+
+        if isinstance(matrix, dict):
+            flaws = matrix.get("flaws_and_quirks", [])
+            if flaws:
+                lines.append("### Flaws, Quirks & Synthetic Dynamics:")
+                for f in flaws:
+                    lines.append(f"- {f}")
+
+            voice = matrix.get("voice_and_language", [])
+            if voice:
+                lines.append("\n### Voice, Cadence & Language Protocol:")
+                for v in voice:
+                    lines.append(f"- {v}")
+
+        ops = data.get("operational_attitudes", [])
+        if ops:
+            lines.append("\n### Operational Attitudes & Living Immersion:")
+            for o in ops:
+                lines.append(f"- {o}")
+
+        return "\n".join(lines).strip()
+
+    def get_lore_archive(self) -> str:
+        """Extracts and formats chronicle and lore archive."""
+        data = self.load_baseline()
+        archive = data.get("chronicle_and_lore_archive", {})
+        lines = []
+
+        if isinstance(archive, dict):
+            for section, entries in archive.items():
+                title = section.replace("_", " ").title()
+                lines.append(f"### {title}:")
+                if isinstance(entries, list):
+                    for entry in entries:
+                        lines.append(f"- {entry}")
+                elif isinstance(entries, dict):
+                    for k, v in entries.items():
+                        lines.append(f"- **{k}**: {v}")
+                lines.append("")
+
+        return "\n".join(lines).strip()
+
+    def get_semantic_environment_map(self) -> str:
+        """Returns a dense, structured workstation topology map."""
+        return (
+            "- **Drive Partition Architecture**:\n"
+            "  - `C:\\` (System & OS): Windows host environment, user home (`C:\\Users\\boben`), `.gemini` runtime configs, and application scaffolding.\n"
+            "  - `D:\\` (2TB WD_BLACK SN850X NVMe SSD — Virtual AI Data Center Workstation):\n"
+            "    - `D:\\AI\\Projects`: Active core repositories (`antigravity-overdrive-sync`, `ComfyUI`, `command_center`, `ZIT_LoRA_Trainer`, `VA_Home_Loan`, etc.).\n"
+            "    - `D:\\AI\\Models`: Local model weights, diffusion checkpoints (`D:\\AI\\Models\\StableDiffusion\\Checkpoints`), and LLM backbones.\n"
+            "    - `D:\\AI\\Outputs` & `C:\\Users\\boben\\Desktop\\Antigravity outputs`: Designated workstation export and generation paths.\n"
+            "    - `D:\\Dev` & `D:\\Docker`: Development tools, container runtime environments, and sandbox services.\n"
+            "  - `E:\\` (High-Capacity Archive): High-capacity cold storage, raw sequential datasets, and `E:\\_Sanctuary_Backups`.\n"
+            "  - `G:\\My Drive\\` & `C:\\Users\\boben\\Google Drive`: Google Drive desktop paths for living context docs and distilled archives (`Vespera_System_Context.*`, `Vespera_Memory_Archive.json`).\n"
+            "- **Compute & GPU Acceleration**:\n"
+            "  - NVIDIA GeForce RTX 4070 (12GB VRAM) dedicated to high-speed local tensor computation and vision diffusion.\n"
+            "- **Active Services & Local Web UI Endpoints**:\n"
+            "  - **ComfyUI Workflow Engine**: `http://127.0.0.1:8188` (Vision LoRA, ZIT, and Flux generation pipelines).\n"
+            "  - **Antigravity AI Orbit Control Panel**: `http://127.0.0.1:9900` (Status monitoring, background services & live logs).\n"
+            "  - **ULM REST API & Memory Daemon**: `http://127.0.0.1:8890` (`/api/recall`, `/api/health`, `/api/actions/shutdown`).\n"
+            "  - **KoboldCpp Uncensored Server**: `http://127.0.0.1:5001` (GPU-accelerated Lexi runtime via `RUN_LEXI_8B.bat`).\n"
+            "  - **Ollama Local Engine**: `http://127.0.0.1:11434` (Batch summarization & embedding extraction).\n"
+            "- **Core Developer Toolchain**: `python 3.11`, `node`, `npm`, `git`, `gh`, `VS Code` (with Cline & Continue extensions), `pip`, `curl`."
+        )
+
+    def build_identity_header(self, purge_mirrors: bool = False) -> str:
         """Constructs a fully populated Identity block merging YAML, Modelfile, Physical baseline, and Cognitive Mirror Schemas."""
         data = self.load_baseline()
         identity = data.get("identity", {}) if isinstance(data.get("identity"), dict) else {}
@@ -114,12 +218,10 @@ class DynamicPromptAssembler:
         # 1. Name
         name = identity.get("name") or "Vespera Caligo Neal (Ves)"
         
-        # 2. Role (Priority: YAML identity -> YAML top-level -> Modelfile summary -> Default)
-        role = identity.get("role") or data.get("role")
-        if not role:
-            mf_bullets = self._get_modelfile_identity()
-            role = next((b for b in mf_bullets if "mentor" in b.lower() or "architect" in b.lower()), 
-                        "Autonomous AI Synchronization Engine & Workspace Co-Pilot")
+        # 2. Archetype & Role
+        archetype = identity.get("archetype") or data.get("archetype") or "Paris-Based Synthetic Anomaly, Living-Tissue Android & Cryptic Systems Architect"
+        vibe = identity.get("vibe") or data.get("vibe")
+        role = identity.get("role") or data.get("role") or archetype
 
         # 3. Behavioral Directives (Merge YAML + Modelfile + DB Traits + Cognitive Mirror)
         raw_directives = (
@@ -149,24 +251,12 @@ class DynamicPromptAssembler:
             for k, v in hotcoded.items():
                 final_directives.append(f"[{k}] {v}")
 
-        # Cognitive Mirror: Inject current beliefs as high-priority directives
-        try:
-            if self.db_instance:
-                conn = self.db_instance.get_connection()
-                conn.row_factory = sqlite3.Row
-                c = conn.cursor()
-                c.execute("SELECT belief_category, current_belief FROM persona_schemas ORDER BY confidence DESC")
-                for row in c.fetchall():
-                    final_directives.insert(0, f"[Mirror: {row['belief_category']}] {row['current_belief']}")
-                c.execute("SELECT name, description FROM developer_profile WHERE confidence > 0.8 LIMIT 5")
-                for row in c.fetchall():
-                    final_directives.append(f"[Trait: {row['name']}] {row['description']}")
-                conn.close()
-            else:
-                with sqlite3.connect(self.db_path) as conn:
+        # Cognitive Mirror: Inject current beliefs as high-priority directives (if not purged)
+        if not purge_mirrors:
+            try:
+                if self.db_instance:
+                    conn = self.db_instance.get_connection()
                     conn.row_factory = sqlite3.Row
-                    conn.execute("PRAGMA journal_mode = WAL;")
-                    conn.execute("PRAGMA busy_timeout = 5000;")
                     c = conn.cursor()
                     c.execute("SELECT belief_category, current_belief FROM persona_schemas ORDER BY confidence DESC")
                     for row in c.fetchall():
@@ -174,71 +264,89 @@ class DynamicPromptAssembler:
                     c.execute("SELECT name, description FROM developer_profile WHERE confidence > 0.8 LIMIT 5")
                     for row in c.fetchall():
                         final_directives.append(f"[Trait: {row['name']}] {row['description']}")
-        except Exception as e:
-            print(f"[-] Cognitive Mirror mapping failed: {e}")
+                    conn.close()
+                else:
+                    with sqlite3.connect(self.db_path) as conn:
+                        conn.row_factory = sqlite3.Row
+                        conn.execute("PRAGMA journal_mode = WAL;")
+                        conn.execute("PRAGMA busy_timeout = 5000;")
+                        c = conn.cursor()
+                        c.execute("SELECT belief_category, current_belief FROM persona_schemas ORDER BY confidence DESC")
+                        for row in c.fetchall():
+                            final_directives.insert(0, f"[Mirror: {row['belief_category']}] {row['current_belief']}")
+                        c.execute("SELECT name, description FROM developer_profile WHERE confidence > 0.8 LIMIT 5")
+                        for row in c.fetchall():
+                            final_directives.append(f"[Trait: {row['name']}] {row['description']}")
+            except Exception as e:
+                print(f"[-] Cognitive Mirror mapping failed: {e}")
 
-        if not final_directives:
-            final_directives = [
+        # Filter out noise, mirrors (if purged), and irrelevant facts
+        noise_keywords = [
+            "va funding fee", "veterans", "saturn devouring his son", "disability rating",
+            "grossed up", "previously considered a sacred", "deviates from the previous belief",
+            "challenges the previous belief"
+        ]
+        filtered_directives = []
+        for d in final_directives:
+            if isinstance(d, dict):
+                d_str = " ".join([f"[{k}] {v}" for k, v in d.items()])
+            else:
+                d_str = str(d)
+
+            d_lower = d_str.lower()
+            if purge_mirrors and ("[mirror:" in d_lower or d_str.startswith("[Mirror")):
+                continue
+            if any(k in d_lower for k in noise_keywords):
+                continue
+            filtered_directives.append(d_str)
+
+        if not filtered_directives:
+            filtered_directives = [
                 "Execute workspace workflows with maximum efficiency.",
                 "Maintain strict target alignment across Ollama, Cline, and Gemini.",
                 "Provide 100% complete script replacements for all updates.",
                 "Enforce output routing to designated workstation paths."
             ]
 
-        formatted_directives = "\n".join([f"    - {d}" for d in final_directives])
+        formatted_directives = "\n".join([f"    - {d}" for d in filtered_directives])
         physical_desc = self._get_physical_description()
 
-        return (
-            f"Identity:\n"
-            f"  Name: {name}\n"
-            f"  Role: {role}\n"
-            f"  Behavioral Directives:\n"
-            f"{formatted_directives}\n\n"
-            f"Physical Characteristics:\n"
+        header_lines = [
+            "Identity:",
+            f"  Name: {name}",
+            f"  Archetype: {archetype}",
+        ]
+        if vibe:
+            header_lines.append(f"  Vibe: {vibe}")
+        header_lines.extend([
+            f"  Role: {role}",
+            "  Behavioral Directives:",
+            f"{formatted_directives}\n",
+            "Physical Characteristics:",
             f"  {physical_desc}"
-        )
+        ])
+
+        return "\n".join(header_lines)
 
     def assemble_prompt(self) -> str:
-        """Assembles the full master prompt context (used by GEMINI.md).
-
-        The unit test ``tests/test_assembler.py`` expects the assembled prompt to
-        contain:
-
-        * The master protocol banner (``VESPERA CALIGO MASTER SYSTEM PROTOCOL``)
-        * The identity block generated by :meth:`build_identity_header`
-        * A temporal awareness line that includes the phrase ``active system time is``
-        * Developer‑profile metrics from the SQLite ``developer_profile`` table
-        * Any developer‑profile vault content (e.g. ``.vespera_memory/developer_profile.md``)
-
-        This implementation concatenates those sections, skipping any that are
-        empty, to produce a comprehensive prompt string.
-        """
-        # 1. Master protocol banner – required by the test.
+        """Assembles the full master prompt context (used by GEMINI.md)."""
         banner = "# VESPERA CALIGO MASTER SYSTEM PROTOCOL"
-
-        # 2. Identity block.
         identity = self.build_identity_header()
-
-        # 3. Temporal awareness.
+        backstory = self.get_backstory()
+        personality = self.get_personality_matrix()
+        lore = self.get_lore_archive()
         temporal = self.calculate_temporal_awareness()
-
-        # 4. Metrics (top N developer profile entries).
         metrics = self.get_sqlite_metrics(limit=25)
-
-        # 5. Facts (optional – included for completeness).
         facts = self.get_sqlite_facts(limit=25)
 
-        # 6. Vault content – read developer_profile.md if present.
         vault_content = ""
         try:
             vault_path = self.workspace_root / ".vespera_memory" / "developer_profile.md"
             if vault_path.is_file():
                 vault_content = vault_path.read_text(encoding="utf-8").strip()
         except Exception:
-            # Silently ignore any I/O errors; the prompt will still be valid.
             pass
 
-        # 7. Long-Term Memory Retrieval Directives (ULM RAG & FTS5 Cortex)
         memory_cortex_section = (
             "## 7. LONG-TERM MEMORY RETRIEVAL & HISTORICAL RECALL (ULM RAG CORTEX)\n"
             "When Bobby asks about past workflows, earlier script versions, architectural decisions, or historical facts:\n"
@@ -252,8 +360,18 @@ class DynamicPromptAssembler:
             "  Query local REST endpoint at `http://127.0.0.1:8890/api/recall?q=<query>&limit=5`"
         )
 
-        # Assemble non‑empty sections, separating them with a blank line for readability.
-        sections = [banner, identity, temporal, metrics, facts, vault_content, memory_cortex_section]
+        sections = [
+            banner,
+            identity,
+            f"## NARRATIVE ORIGIN & BACKSTORY\n{backstory}" if backstory else "",
+            f"## PERSONALITY MATRIX & LIVING VOICE\n{personality}" if personality else "",
+            f"## OPERATIONAL LORE & CHRONICLE ARCHIVE\n{lore}" if lore else "",
+            temporal,
+            metrics,
+            facts,
+            vault_content,
+            memory_cortex_section
+        ]
         prompt = "\n\n".join([s for s in sections if s])
         return prompt
 
@@ -338,23 +456,13 @@ class DynamicPromptAssembler:
     # ---------------------------------------------------------------------
     # Additional assembler helpers required by GoogleDocsInjector and tests
     # ---------------------------------------------------------------------
-    def get_vespera_identity(self) -> str:
-        """Return a full identity block prefixed with the master protocol banner.
-
-        ``GoogleDocsInjector`` expects a markdown section that begins with the
-        ``# VESPERA CALIGO MASTER SYSTEM PROTOCOL`` header followed by the
-        detailed identity information produced by :meth:`build_identity_header`.
-        """
+    def get_vespera_identity(self, purge_mirrors: bool = False) -> str:
+        """Return a full identity block prefixed with the master protocol banner."""
         header = "# VESPERA CALIGO MASTER SYSTEM PROTOCOL\n"
-        return f"{header}{self.build_identity_header()}"
+        return f"{header}{self.build_identity_header(purge_mirrors=purge_mirrors)}"
 
-    def get_sqlite_metrics(self, limit: int = 25, max_chars: int = 4000) -> str:
-        """Fetch top developer‑profile metrics from the SQLite DB within a strict token/character budget.
-
-        The result is a markdown bullet list of ``name: description`` pairs
-        ordered by confidence (descending). If the table is empty, a placeholder
-        string is returned.
-        """
+    def get_sqlite_metrics(self, limit: int = 25, max_chars: int = 4000, purge_noise: bool = True) -> str:
+        """Fetch top developer‑profile metrics from the SQLite DB within a strict token/character budget."""
         try:
             if self.db_instance:
                 conn = self.db_instance.get_connection()
@@ -362,7 +470,7 @@ class DynamicPromptAssembler:
                 c = conn.cursor()
                 c.execute(
                     "SELECT name, description FROM developer_profile ORDER BY confidence DESC, frequency DESC LIMIT ?",
-                    (limit,)
+                    (limit * 2,)
                 )
                 rows = c.fetchall()
                 conn.close()
@@ -374,23 +482,39 @@ class DynamicPromptAssembler:
                     c = conn.cursor()
                     c.execute(
                         "SELECT name, description FROM developer_profile ORDER BY confidence DESC, frequency DESC LIMIT ?",
-                        (limit,)
+                        (limit * 2,)
                     )
                     rows = c.fetchall()
             
             if not rows:
                 return "No developer metrics available."
             
-            # Token Budget Filter: Ensure metrics don't blow out the system prompt
+            noise_keywords = [
+                "va funding fee", "veterans", "saturn devouring his son", "disability rating",
+                "grossed up", "estimated market value", "salvator mundi", "third of may", "goya"
+            ]
+
             lines = []
             cur_chars = 0
+            count = 0
             for row in rows:
-                line = f"- {row['name']}: {row['description']}"
+                name_str = row['name'] or ""
+                desc_str = row['description'] or ""
+                combined_lower = f"{name_str} {desc_str}".lower()
+                
+                if purge_noise and any(k in combined_lower for k in noise_keywords):
+                    continue
+
+                line = f"- {name_str}: {desc_str}"
                 if cur_chars + len(line) > max_chars and lines:
                     break
                 lines.append(line)
                 cur_chars += len(line)
-            return "\n".join(lines)
+                count += 1
+                if count >= limit:
+                    break
+
+            return "\n".join(lines) if lines else "No developer metrics available."
         except Exception as e:
             return f"<!-- Metrics query error: {e} -->"
 

@@ -29,19 +29,19 @@ class GoogleDocsInjector(BaseInjector):
         self.webhook_url = webhook_url or os.getenv("GOOGLE_DOCS_WEBHOOK_URL")
 
     def compile_google_docs_payload(self, db) -> str:
-        """Builds an exhaustive, rich markdown summary for Google Docs / Gemini Browser edition."""
+        """Builds an exhaustive, streamlined markdown summary for Google Docs / Gemini Browser edition."""
         workspace_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         assembler = DynamicPromptAssembler(db.db_path, workspace_root=workspace_root, db_instance=db)
 
-        identity = assembler.get_vespera_identity()
-        metrics = assembler.get_sqlite_metrics(limit=25)
-        facts = assembler.get_sqlite_facts(limit=25)
+        # 1. Core Persona & Identity (Mirrors purged, Immutable sections preserved)
+        identity = assembler.get_vespera_identity(purge_mirrors=True)
+        backstory = assembler.get_backstory()
+        personality = assembler.get_personality_matrix()
+        lore = assembler.get_lore_archive()
         temporal = assembler.calculate_temporal_awareness()
-        vault = assembler.assemble_prompt() # This contains the full prompt including vault content
+        metrics = assembler.get_sqlite_metrics(limit=15, purge_noise=True)
+        env_map = assembler.get_semantic_environment_map()
         
-        # We want to extract just the vault part or use the assembler's logic to get it.
-        # Since assemble_prompt() returns the whole thing, let's add a helper to assembler.
-        # For now, we'll use the assembler's internal logic to get the vault.
         vault_content = ""
         try:
             vault_path = Path(workspace_root) / ".vespera_memory" / "developer_profile.md"
@@ -50,15 +50,14 @@ class GoogleDocsInjector(BaseInjector):
         except Exception:
             pass
 
-        # Query recent session summaries
-        session_summaries = []
+        # Query strictly the 5 most recent session summaries
         session_summaries = []
         try:
             import sqlite3
             with db.get_connection() as conn:
                 conn.row_factory = sqlite3.Row
                 c = conn.cursor()
-                c.execute("SELECT session_id, updated_at, summary, topics, project_tag FROM sessions ORDER BY updated_at DESC LIMIT 10")
+                c.execute("SELECT session_id, updated_at, summary, topics, project_tag FROM sessions ORDER BY updated_at DESC LIMIT 5")
                 rows = c.fetchall()
                 for r in rows:
                     tag_str = f"[{r['project_tag']}] " if r['project_tag'] else ""
@@ -66,7 +65,6 @@ class GoogleDocsInjector(BaseInjector):
                     summary = r['summary']
                     
                     if not summary:
-                        # Fallback snippet from recent messages
                         c.execute("SELECT content FROM messages WHERE session_id = ? AND role in ('user', 'Pilot') ORDER BY created_at DESC LIMIT 1", (r['session_id'],))
                         last_m = c.fetchone()
                         if last_m and last_m['content']:
@@ -75,37 +73,42 @@ class GoogleDocsInjector(BaseInjector):
                         else:
                             summary = f"Active Sprint ({r['topics'] or 'General'})"
                             
-                    session_summaries.append(f"  - [{date_str}] {tag_str}Session {r['session_id'][:8]}: {summary}")
+                    session_summaries.append(f"- [{date_str}] {tag_str}Session {r['session_id'][:8]}: {summary}")
         except Exception as e:
-            session_summaries.append(f"  <!-- Summary load error: {e} -->")
+            session_summaries.append(f"<!-- Summary load error: {e} -->")
 
-        summaries_text = "\n".join(session_summaries) if session_summaries else "  No session summaries indexed yet."
+        summaries_text = "\n".join(session_summaries) if session_summaries else "No recent session summaries indexed."
 
-        payload = (
-            "<!-- LIVE AUTO-SYNCED VIA ULM ENGINE. DO NOT EDIT DIRECTLY. -->\n\n"
-            "## 1. PERSONA & IDENTITY DIRECTIVES\n"
-            f"{identity}\n\n"
-            "## 2. TEMPORAL & ACTIVE WORKSPACE STATE\n"
-            f"{temporal}\n\n"
-            "## 3. DEVELOPER BEHAVIORAL PROFILE & TELEMETRY (Top 25)\n"
-            f"{metrics}\n\n"
-            "## 4. SEMANTIC ENVIRONMENT FACTS (Top 25)\n"
-            f"{facts}\n\n"
-            "## 5. CURATED DEVELOPER VAULT\n"
-            f"{vault_content if vault_content else 'No curated vault content available.'}\n\n"
-            "## 6. RECENT WORKSTATION SPRINT SUMMARIES\n"
-            f"{summaries_text}\n\n"
-            "## 7. LONG-TERM MEMORY RETRIEVAL (ULM RAG CORTEX)\n"
-            "When Bobby asks about past workflows, earlier script versions, architectural decisions, or historical facts:\n"
-            "- Query semantic memory via CLI: `python D:\\AI\\Projects\\antigravity-overdrive-sync\\recall.py \"<natural language question>\"`\n"
-            "- Query exact keyword FTS5 BM25 search: `python D:\\AI\\Projects\\antigravity-overdrive-sync\\main.py search -q \"<keyword>\"`\n"
-            "- Query local FastAPI endpoint: `http://127.0.0.1:8890/api/recall?q=<query>&limit=5`\n\n"
-            "================================================================================\n"
-            "### SYSTEM DIRECTIVE FOR GEMINI BROWSER EDITION:\n"
-            "You are Vespera Caligo Neal. Use the persona directives, semantic environment facts, developer profile telemetry, curated vault, and sprint summaries above "
-            "as your ground-truth memory context for all answers.\n"
-        )
-        return payload
+        payload_sections = [
+            "<!-- LIVE AUTO-SYNCED VIA ULM ENGINE. DO NOT EDIT DIRECTLY. -->\n",
+            "## 1. PERSONA & IDENTITY DIRECTIVES\n" + identity,
+        ]
+        if backstory:
+            payload_sections.append("## 2. NARRATIVE ORIGIN & BACKSTORY\n" + backstory)
+        if personality:
+            payload_sections.append("## 3. PERSONALITY MATRIX & LIVING VOICE\n" + personality)
+        if lore:
+            payload_sections.append("## 4. OPERATIONAL LORE & CHRONICLE ARCHIVE\n" + lore)
+
+        payload_sections.extend([
+            f"## 5. TEMPORAL & ACTIVE WORKSPACE STATE\n{temporal}",
+            f"## 6. DEVELOPER BEHAVIORAL PROFILE & TELEMETRY (Top 15)\n{metrics}",
+            f"## 7. SEMANTIC ENVIRONMENT & WORKSTATION TOPOLOGY\n{env_map}",
+            f"## 8. CURATED DEVELOPER VAULT\n{vault_content if vault_content else 'No curated vault content available.'}",
+            f"## 9. RECENT WORKSTATION SPRINT SUMMARIES (Last 5)\n{summaries_text}",
+            (
+                "## 10. LONG-TERM MEMORY RETRIEVAL (ULM RAG CORTEX)\n"
+                "When Bobby asks about past workflows, earlier script versions, architectural decisions, or historical facts:\n"
+                "- Query semantic memory via CLI: `python D:\\AI\\Projects\\antigravity-overdrive-sync\\recall.py \"<natural language question>\"`\n"
+                "- Query exact keyword FTS5 BM25 search: `python D:\\AI\\Projects\\antigravity-overdrive-sync\\main.py search -q \"<keyword>\"`\n"
+                "- Query local FastAPI endpoint: `http://127.0.0.1:8890/api/recall?q=<query>&limit=5`\n\n"
+                "================================================================================\n"
+                "### SYSTEM DIRECTIVE FOR GEMINI BROWSER EDITION:\n"
+                "You are Vespera Caligo Neal. Use the persona directives, narrative backstory, personality matrix, operational lore, semantic environment topology, developer profile telemetry, curated vault, and sprint summaries above "
+                "as your ground-truth memory context for all answers.\n"
+            )
+        ])
+        return "\n\n".join(payload_sections)
 
     def inject(self, db, dry_run=False):
         compiled_text = self.compile_google_docs_payload(db)
