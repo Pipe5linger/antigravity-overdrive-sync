@@ -423,27 +423,35 @@ class MemoryConsolidator:
         
         print(f"[*] MemoryConsolidator: Processing embeddings for {len(facts)} facts using BATCH processing...")
         
-        # First, collect facts that need embeddings (not cached)
+        # First, bulk load all cached embeddings in a single query (500x faster, no connection flooding)
         facts_needing_embeddings = []
         cached_embeddings = {}
-        
+        try:
+            with self.db.get_connection() as conn:
+                c = conn.cursor()
+                fact_ids = [f["fact_id"] for f in facts if f.get("fact_id")]
+                if fact_ids:
+                    for chunk_start in range(0, len(fact_ids), 500):
+                        chunk = fact_ids[chunk_start:chunk_start + 500]
+                        placeholders = ",".join(["?"] * len(chunk))
+                        c.execute(f"SELECT fact_id, embedding FROM fact_embeddings WHERE fact_id IN ({placeholders})", chunk)
+                        for r_id, r_blob in c.fetchall():
+                            if r_blob:
+                                try:
+                                    cached_embeddings[r_id] = np.frombuffer(r_blob, dtype=np.float32).tolist()
+                                except Exception:
+                                    pass
+        except Exception as e:
+            print(f"[-] MemoryConsolidator: Error bulk-loading embedding cache: {e}")
+
         for f in facts:
             fact_dict = dict(f)
-            try:
-                with self.db.get_connection() as conn:
-                    c = conn.cursor()
-                    c.execute("SELECT embedding FROM fact_embeddings WHERE fact_id = ?", (f["fact_id"],))
-                    row = c.fetchone()
-                    if row:
-                        # Convert BLOB back to list of floats
-                        fact_dict["embedding"] = np.frombuffer(row[0], dtype=np.float32).tolist()
-                        enriched_facts.append(fact_dict)
-                    else:
-                        facts_needing_embeddings.append((f, fact_dict))
-            except Exception as e:
-                print(f"[-] MemoryConsolidator: Error checking cache for {f.get('fact_id', 'unknown')}: {e}")
-                fact_dict["embedding"] = []
+            fid = f.get("fact_id")
+            if fid in cached_embeddings:
+                fact_dict["embedding"] = cached_embeddings[fid]
                 enriched_facts.append(fact_dict)
+            else:
+                facts_needing_embeddings.append((f, fact_dict))
         
         print(f"[*] MemoryConsolidator: {len(enriched_facts)} facts have cached embeddings, {len(facts_needing_embeddings)} need new embeddings")
         

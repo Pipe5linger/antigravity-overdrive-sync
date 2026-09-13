@@ -4,8 +4,11 @@ import sys
 import json
 import asyncio
 import httpx
-from .token_logger import log as token_log
 import sqlite3
+try:
+    from .token_logger import log as token_log
+except ImportError:
+    from core.token_logger import log as token_log
 import urllib.request
 import urllib.parse
 from core.utils import AsyncTokenBucket

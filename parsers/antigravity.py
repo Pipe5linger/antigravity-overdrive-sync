@@ -1,6 +1,6 @@
 import os
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from parsers.base import BaseParser
 from core import fact_extractor
@@ -176,7 +176,7 @@ class AntigravityParser(BaseParser):
                     if messages:
                         extracted_payloads.append({
                             "chat_id": item,
-                            "last_mutated": datetime.fromtimestamp(mtime).isoformat(),
+                            "last_mutated": datetime.fromtimestamp(mtime, tz=timezone.utc).isoformat(),
                             "messages": messages,
                             "project_tag": project_tag
                         })

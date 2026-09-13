@@ -1,6 +1,8 @@
 import os
 import sys
 import json
+import time
+import threading
 import asyncio
 import sqlite3
 import datetime
@@ -332,7 +334,6 @@ def run_sync_task():
         for line in tb.splitlines()[-6:]:
             add_web_log(f"    TRACE: {line.strip()}")
 
-import threading
 _sync_thread_running = False
 
 @app.get("/api/search")

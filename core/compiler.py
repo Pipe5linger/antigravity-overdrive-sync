@@ -13,7 +13,10 @@ import sqlite3
 import random
 from datetime import datetime
 import subprocess
-from .token_logger import log as token_log
+try:
+    from .token_logger import log as token_log
+except ImportError:
+    from core.token_logger import log as token_log
 from pathlib import Path
 
 # Import dynamic pipeline assembler
@@ -23,7 +26,7 @@ from core.assembler import DynamicPromptAssembler
 # WORKSPACE METRICS & ENVIRONMENTAL HARDENING
 # ==============================================================================
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-DB_PATH = PROJECT_ROOT / "sync_state.db"
+DB_PATH = PROJECT_ROOT / "db" / "sync_state.db"
 OUTPUT_FILE = PROJECT_ROOT / "Modelfile.local"
 LAST_SYNC_FILE = PROJECT_ROOT / "core" / "last_sync.txt"
 

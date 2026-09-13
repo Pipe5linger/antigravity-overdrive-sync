@@ -75,31 +75,40 @@ def main():
 
     # 2. Run automatic database cleanup/deduplication
     print("\n[*] Running vault deduplication pass...")
-    try:
-        import dedupe_vault
-        dedupe_vault.deduplicate_vault()
-        print("[+] Vault deduplication finished.")
-    except ImportError:
+    dedupe_script = BASE_DIR / "scripts" / "sync_vault" / "dedupe_vault.py"
+    if not dedupe_script.exists():
+        dedupe_script = BASE_DIR / "dedupe_vault.py"
+
+    if dedupe_script.exists():
+        try:
+            sub_res = subprocess.run([sys.executable, str(dedupe_script)], cwd=str(BASE_DIR))
+            if sub_res.returncode == 0:
+                print("[+] Vault deduplication finished.")
+            else:
+                print(f"[-] Deduplication exited with code {sub_res.returncode}")
+        except Exception as e:
+            print(f"[-] Deduplication failed with error: {e}")
+    else:
         print("[!] 'dedupe_vault.py' not found. Skipping deduplication pass.")
-    except Exception as e:
-        print(f"[-] Deduplication failed with error: {e}")
 
     # 3. Execute persona compiler
     print("\n[*] Triggering persona compiler...")
-    try:
-        import compile_persona
-        compile_persona.main()
-        print("[+] Persona compilation finished.")
-    except ImportError:
-        print("[!] 'compile_persona.py' import failed. Attempting subprocess fallback...")
+    compiler_script = BASE_DIR / "scripts" / "generators_and_tools" / "compile_persona.py"
+    if not compiler_script.exists():
         compiler_script = BASE_DIR / "compile_persona.py"
-        comp_result = subprocess.run([sys.executable, str(compiler_script)], cwd=str(BASE_DIR))
-        if comp_result.returncode != 0:
-            print("[-] Persona compilation failed. Aborting Ollama rebuild.")
+
+    if compiler_script.exists():
+        try:
+            comp_result = subprocess.run([sys.executable, str(compiler_script)], cwd=str(BASE_DIR))
+            if comp_result.returncode != 0:
+                print("[-] Persona compilation failed. Aborting Ollama rebuild.")
+                return
+            print("[+] Persona compilation finished.")
+        except Exception as e:
+            print(f"[-] Compiler failed with error: {e}")
             return
-    except Exception as e:
-        print(f"[-] Compiler failed with error: {e}")
-        return
+    else:
+        print("[!] 'compile_persona.py' not found. Skipping persona compilation.")
 
     # 4. Auto-rebuild Ollama model
     auto_rebuild_ollama_model(model_name=MODEL_NAME, modelfile_path=MODELFILE_PATH)

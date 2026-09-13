@@ -46,8 +46,8 @@ class TemporalDegradation:
             return fact.get("weight", 1.0), False
         
         initial_weight = fact.get("weight", 1.0)
-        # Default to now if timestamp is missing or None
-        timestamp = fact.get("created_at")
+        # Fall back to first_seen or last_seen if created_at is missing
+        timestamp = fact.get("created_at") or fact.get("first_seen") or fact.get("last_seen")
         if timestamp is None:
             timestamp = datetime.now(timezone.utc).timestamp()
         elif isinstance(timestamp, str):

@@ -1,11 +1,14 @@
 import sys
+import json
 import http.server
 import socketserver
 import urllib.request
-import urllib.error
 import os
-from .token_logger import log as token_log
 import time
+try:
+    from .token_logger import log as token_log
+except ImportError:
+    from core.token_logger import log as token_log
 import uuid
 
 PORT = 11434
@@ -179,6 +182,7 @@ class ProxyHandler(http.server.BaseHTTPRequestHandler):
         
         # Build standard OpenAI response structure
         token_log('port_proxy', user_prompt, result)
+        response_data = {
             "id": f"chatcmpl-{uuid.uuid4().hex[:10]}",
             "object": "chat.completion",
             "created": int(time.time()),

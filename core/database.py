@@ -13,6 +13,7 @@ class ULMDatabase:
         if "test" not in self.db_path.lower() and self.db_path != ":memory:":
             conn.execute("PRAGMA journal_mode = WAL;")
         conn.execute("PRAGMA busy_timeout = 5000;")
+        conn.execute("PRAGMA foreign_keys = ON;")
         return conn
 
     def initialize_db(self):
@@ -26,9 +27,9 @@ class ULMDatabase:
                 """)
                 
                 # Check current version, default to 4
-                c.execute("SELECT version FROM schema_version")
+                c.execute("SELECT MAX(version) FROM schema_version")
                 row = c.fetchone()
-                if not row:
+                if not row or row[0] is None:
                     c.execute("INSERT INTO schema_version (version) VALUES (4)")
                     current_version = 4
                 else:
@@ -246,6 +247,67 @@ class ULMDatabase:
 
                     c.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (9)")
 
+                if current_version < 10:
+                    # Phase 5 Performance & Integrity: Real-Time FTS5 Triggers & Timestamp Backfill
+                    try:
+                        c.execute("UPDATE facts SET created_at = COALESCE(first_seen, last_seen, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) WHERE created_at IS NULL")
+                    except Exception as e:
+                        print(f"[-] Warning backfilling facts created_at: {e}")
+
+                    # Resync FTS5 virtual tables to eliminate historical drift
+                    try:
+                        c.execute("DELETE FROM messages_fts")
+                        c.execute("INSERT INTO messages_fts (session_id, role, content, created_at) SELECT session_id, role, content, created_at FROM messages")
+                        c.execute("DELETE FROM facts_fts")
+                        c.execute("INSERT INTO facts_fts (fact_id, fact, category, project_tag) SELECT fact_id, fact, category, project_tag FROM facts WHERE fact_id IS NOT NULL")
+                    except Exception as e:
+                        print(f"[-] Warning resyncing FTS5 tables: {e}")
+
+                    # Automatic synchronization triggers
+                    triggers = [
+                        """
+                        CREATE TRIGGER IF NOT EXISTS trg_messages_ai AFTER INSERT ON messages
+                        BEGIN
+                            INSERT INTO messages_fts (session_id, role, content, created_at)
+                            VALUES (new.session_id, new.role, new.content, new.created_at);
+                        END;
+                        """,
+                        """
+                        CREATE TRIGGER IF NOT EXISTS trg_messages_ad AFTER DELETE ON messages
+                        BEGIN
+                            DELETE FROM messages_fts WHERE session_id = old.session_id AND created_at = old.created_at AND content = old.content;
+                        END;
+                        """,
+                        """
+                        CREATE TRIGGER IF NOT EXISTS trg_facts_ai AFTER INSERT ON facts
+                        BEGIN
+                            INSERT INTO facts_fts (fact_id, fact, category, project_tag)
+                            VALUES (new.fact_id, new.fact, new.category, new.project_tag);
+                        END;
+                        """,
+                        """
+                        CREATE TRIGGER IF NOT EXISTS trg_facts_ad AFTER DELETE ON facts
+                        BEGIN
+                            DELETE FROM facts_fts WHERE fact_id = old.fact_id;
+                        END;
+                        """,
+                        """
+                        CREATE TRIGGER IF NOT EXISTS trg_facts_au AFTER UPDATE ON facts
+                        BEGIN
+                            DELETE FROM facts_fts WHERE fact_id = old.fact_id;
+                            INSERT INTO facts_fts (fact_id, fact, category, project_tag)
+                            VALUES (new.fact_id, new.fact, new.category, new.project_tag);
+                        END;
+                        """
+                    ]
+                    for stmt in triggers:
+                        try:
+                            c.execute(stmt)
+                        except Exception as e:
+                            print(f"[-] Warning creating trigger: {e}")
+
+                    c.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (10)")
+
                 # Always ensure profiled_at column exists (safe migration)
                 try:
                     c.execute("ALTER TABLE sessions ADD COLUMN profiled_at TEXT;")
@@ -253,8 +315,9 @@ class ULMDatabase:
                     pass  # Column already exists
                 
                 conn.commit()
-            c.execute("SELECT version FROM schema_version")
-            final_version = c.fetchone()[0]
+                c.execute("SELECT MAX(version) FROM schema_version")
+                final_version = c.fetchone()[0]
+
             print(f"[+] ULM SQLite Database successfully initialized with WAL Mode and Schema Version {final_version}.")
         except sqlite3.Error as e:
             print(f"[-] Error initializing database: {e}")

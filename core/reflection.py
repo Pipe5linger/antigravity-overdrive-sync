@@ -35,6 +35,13 @@ class ReflectionEngine:
             print(f"[-] ReflectionEngine: Error fetching schemas: {e}")
             return []
 
+    def _is_ollama_running(self, endpoint: str) -> bool:
+        try:
+            res = requests.get(f"{endpoint.rstrip('/')}/api/tags", timeout=3)
+            return res.status_code == 200
+        except Exception:
+            return False
+
     def reflect_on_facts(self, consolidated_facts: List[Dict]) -> List[Dict]:
         """
         Analyzes new facts against current schemas to detect dissonance 
@@ -46,6 +53,10 @@ class ReflectionEngine:
         schemas = self.get_current_schemas()
         llm_provider, llm_model, endpoint = self._get_llm_settings()
         
+        if llm_provider == "local_ollama" and not self._is_ollama_running(endpoint):
+            print("[*] ReflectionEngine: Ollama is offline — skipping cognitive dissonance checks.")
+            return []
+
         mutations = []
         
         # We process facts in small batches to avoid context saturation

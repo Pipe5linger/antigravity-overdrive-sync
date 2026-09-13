@@ -131,7 +131,7 @@ def main():
     out_path = db_file.parent.parent / default_out
     out_path.write_text(out_content, encoding="utf-8")
 
-    print(f"[✓] Clean persona successfully compiled to: {out_path}")
+    print(f"[+] Clean persona successfully compiled to: {out_path}")
 
 
 if __name__ == "__main__":
