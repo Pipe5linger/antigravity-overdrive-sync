@@ -147,108 +147,79 @@ class GoogleDocsInjector(BaseInjector):
             except Exception as e:
                 print(f"[-] Webhook push failed: {e}")
 
-        # 2. Option B: Local Google Drive / File Sync (.docx, .txt, .md)
+        # 2. Option B: Local Google Drive / File Sync (.md + JSON archive)
         try:
             from core.utils import atomic_write
             atomic_write(self.target_file, compiled_text)
-            print(f"[+] Local Google Docs file written to: {self.target_file}")
-            
-            # Also write .docx and .txt in target directory for Google Workspace Extension compatibility
+            print(f"[+] Synced .md version for Gemini Web: {self.target_file}")
+
             target_path = Path(self.target_file)
-            txt_path = target_path.with_suffix(".txt")
-            docx_path = target_path.with_suffix(".docx")
 
-            atomic_write(str(txt_path), compiled_text)
-            print(f"[+] Synced .txt version for Gemini Web: {txt_path}")
+            # Export Distilled Brain Archive (.json) directly to Google Drive
+            import sqlite3
+            gdrive_json_path = target_path.with_name("Vespera_Memory_Archive.json")
 
-            try:
-                import docx
-                import re
-                doc = docx.Document()
-                doc.add_heading('VESPERA CALIGO - SYSTEM MEMORY & WORKSPACE CONTEXT', 0)
-                for line in compiled_text.split('\n'):
-                    clean_line = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', '', line)
-                    if clean_line.startswith('# '):
-                        doc.add_heading(clean_line[2:], level=1)
-                    elif clean_line.startswith('## '):
-                        doc.add_heading(clean_line[3:], level=2)
-                    elif clean_line.startswith('### '):
-                        doc.add_heading(clean_line[4:], level=3)
-                    else:
-                        doc.add_paragraph(clean_line)
-                doc.save(str(docx_path))
-                print(f"[+] Synced native .docx version for Gemini Web: {docx_path}")
-            except Exception as e_docx:
-                print(f"[-] docx export warning: {e_docx}")
+            with db.get_connection() as conn:
+                conn.row_factory = sqlite3.Row
+                c = conn.cursor()
 
-            # 3. Export Distilled Brain Archive (.json) directly to Google Drive
-            try:
-                import sqlite3
-                gdrive_json_path = target_path.with_name("Vespera_Memory_Archive.json")
-                
-                with db.get_connection() as conn:
-                    conn.row_factory = sqlite3.Row
-                    c = conn.cursor()
-                    
-                    # 1. Fetch Golden Facts (high confidence first)
-                    c.execute("""
-                        SELECT fact_id, fact, category, confidence, first_seen, last_seen, project_tag 
-                        FROM facts 
-                        WHERE fact_id IS NOT NULL 
-                        ORDER BY confidence DESC, last_seen DESC
-                    """)
-                    facts_list = [dict(r) for r in c.fetchall()]
-                    
-                    # 2. Fetch Developer Profile Metrics
-                    c.execute("""
-                        SELECT category, name, description, confidence, frequency, last_seen 
-                        FROM developer_profile 
-                        ORDER BY confidence DESC, frequency DESC
-                    """)
-                    profile_list = [dict(r) for r in c.fetchall()]
-                    
-                    # 3. Fetch Cognitive Mirror Schemas
-                    c.execute("""
-                        SELECT belief_category, current_belief, confidence, last_mutated 
-                        FROM persona_schemas 
-                        ORDER BY confidence DESC
-                    """)
-                    schemas_list = [dict(r) for r in c.fetchall()]
-                    
-                    # 4. Fetch Session Summaries
-                    c.execute("""
-                        SELECT session_id, updated_at, summary, topics, project_tag 
-                        FROM sessions 
-                        WHERE summary IS NOT NULL 
-                        ORDER BY updated_at DESC
-                    """)
-                    sessions_list = [dict(r) for r in c.fetchall()]
-                    
-                    # Compile consolidated distilled archive
-                    distilled_archive = {
-                        "archive_type": "Vespera ULM Distilled Memory Cortex",
-                        "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-                        "stats": {
-                            "total_facts": len(facts_list),
-                            "total_profile_metrics": len(profile_list),
-                            "total_schemas": len(schemas_list),
-                            "total_session_summaries": len(sessions_list)
-                        },
-                        "persona_schemas": schemas_list,
-                        "golden_facts": facts_list,
-                        "developer_profile": profile_list,
-                        "session_history": sessions_list
-                    }
-                    
-                    with open(gdrive_json_path, "w", encoding="utf-8") as jf:
-                        json.dump(distilled_archive, jf, indent=2, ensure_ascii=False)
-                        
-                    print(f"[+] Synced distilled JSON memory archive for Gemini Web: {gdrive_json_path}")
-            except Exception as e_json:
-                print(f"[-] JSON archive export warning: {e_json}")
+                # 1. Fetch Golden Facts (high confidence first)
+                c.execute("""
+                    SELECT fact_id, fact, category, confidence, first_seen, last_seen, project_tag 
+                    FROM facts 
+                    WHERE fact_id IS NOT NULL 
+                    ORDER BY confidence DESC, last_seen DESC
+                """)
+                facts_list = [dict(r) for r in c.fetchall()]
+
+                # 2. Fetch Developer Profile Metrics
+                c.execute("""
+                    SELECT category, name, description, confidence, frequency, last_seen 
+                    FROM developer_profile 
+                    ORDER BY confidence DESC, frequency DESC
+                """)
+                profile_list = [dict(r) for r in c.fetchall()]
+
+                # 3. Fetch Cognitive Mirror Schemas
+                c.execute("""
+                    SELECT belief_category, current_belief, confidence, last_mutated 
+                    FROM persona_schemas 
+                    ORDER BY confidence DESC
+                """)
+                schemas_list = [dict(r) for r in c.fetchall()]
+
+                # 4. Fetch Session Summaries
+                c.execute("""
+                    SELECT session_id, updated_at, summary, topics, project_tag 
+                    FROM sessions 
+                    WHERE summary IS NOT NULL 
+                    ORDER BY updated_at DESC
+                """)
+                sessions_list = [dict(r) for r in c.fetchall()]
+
+                # Compile consolidated distilled archive
+                distilled_archive = {
+                    "archive_type": "Vespera ULM Distilled Memory Cortex",
+                    "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                    "stats": {
+                        "total_facts": len(facts_list),
+                        "total_profile_metrics": len(profile_list),
+                        "total_schemas": len(schemas_list),
+                        "total_session_summaries": len(sessions_list)
+                    },
+                    "persona_schemas": schemas_list,
+                    "golden_facts": facts_list,
+                    "developer_profile": profile_list,
+                    "session_history": sessions_list
+                }
+
+                with open(gdrive_json_path, "w", encoding="utf-8") as jf:
+                    json.dump(distilled_archive, jf, indent=2, ensure_ascii=False)
+
+                print(f"[+] Synced distilled JSON memory archive for Gemini Web: {gdrive_json_path}")
 
             success = True
         except Exception as e:
-            print(f"[-] Failed writing local file: {e}")
+            print(f"[-] Failed writing JSON archive: {e}")
 
         return success
