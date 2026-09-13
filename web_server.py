@@ -334,8 +334,6 @@ def run_sync_task():
         for line in tb.splitlines()[-6:]:
             add_web_log(f"    TRACE: {line.strip()}")
 
-_sync_thread_running = False
-
 @app.get("/api/search")
 def search_memory(q: str = Query(...), limit: int = Query(15)):
     """Direct database search endpoint allowing LLMs or users to query sync_state.db on demand."""
@@ -365,16 +363,21 @@ def shutdown_webui_server():
     threading.Thread(target=_kill, daemon=True).start()
     return {"status": "success", "message": "ULM WebUI server shutting down..."}
 
+_sync_thread_running = False
+_sync_lock = threading.Lock()
+
 @app.post("/api/actions/sync")
 def trigger_sync(background_tasks: BackgroundTasks, auto_shutdown: bool = Query(False)):
     global _sync_thread_running
-    if _sync_thread_running:
-        add_web_log("[*] Sync task already running in background.")
-        return {"status": "running", "message": "ULM Sync task already in progress."}
+    
+    with _sync_lock:
+        if _sync_thread_running:
+            add_web_log("[*] Sync task already running in background.")
+            return {"status": "running", "message": "ULM Sync task already in progress."}
+        _sync_thread_running = True
 
     def _async_sync():
         global _sync_thread_running
-        _sync_thread_running = True
         try:
             run_sync_task()
             if auto_shutdown:
@@ -382,7 +385,8 @@ def trigger_sync(background_tasks: BackgroundTasks, auto_shutdown: bool = Query(
                 time.sleep(3)
                 os._exit(0)
         finally:
-            _sync_thread_running = False
+            with _sync_lock:
+                _sync_thread_running = False
 
     add_web_log("Triggered live ULM sync execution in background worker thread...")
     threading.Thread(target=_async_sync, daemon=True).start()

@@ -2,8 +2,8 @@ import os
 import shutil
 from pathlib import Path
 
-# Root folder to clean
-PROJECT_ROOT = Path(__file__).parent.resolve()
+# Root folder to clean (we are now in scripts/db_utils/)
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
 # Safety First: Set to False when you're ready to actually move files
 DRY_RUN = True

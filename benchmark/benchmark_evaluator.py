@@ -3,11 +3,15 @@ import statistics
 import random
 from typing import List, Dict, Any
 
+import sys
+from pathlib import Path
+sys.path.append(str(Path(__file__).resolve().parent.parent))
+
 try:
     from core.profile_evaluator import ProfileEvaluator
     from core.fact_extractor import FactExtractor
-except ImportError:
-    print("[!] Ensure this script is placed in your project root alongside 'core/'.")
+except ImportError as e:
+    print(f"[!] Import error: {e}")
     exit(1)
 
 

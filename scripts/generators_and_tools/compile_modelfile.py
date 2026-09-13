@@ -2,13 +2,9 @@ import sqlite3
 from pathlib import Path
 
 # Paths Configuration
-PROJECT_DIR = Path(r"D:\AI\Projects\antigravity-overdrive-sync")
-MODELFILE_PATH = PROJECT_DIR / "Modelfile"
-DB_PATH = PROJECT_DIR / "sync_state.db"
-
-# Fallback check if sync_state.db is in current working directory
-if not DB_PATH.exists() and Path("sync_state.db").exists():
-    DB_PATH = Path("sync_state.db")
+PROJECT_DIR = Path(__file__).resolve().parent.parent.parent
+MODELFILE_PATH = PROJECT_DIR / "modelfiles" / "Modelfile"
+DB_PATH = PROJECT_DIR / "db" / "sync_state.db"
 
 
 def fetch_top_traits(db_path, limit_per_category=20):

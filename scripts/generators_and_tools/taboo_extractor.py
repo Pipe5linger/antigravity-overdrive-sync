@@ -12,7 +12,8 @@ import time
 from pathlib import Path
 
 # --- Workstation Topology Setup ---
-ULM_DB_PATH = Path(r"D:\AI\Projects\antigravity-overdrive-sync\ulm_memory.db")
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+ULM_DB_PATH = PROJECT_ROOT / "db" / "sync_state.db"
 OLLAMA_URL = "http://127.0.0.1:11434/api/generate"
 OLLAMA_MODEL = "qwen2.5:7b-instruct"
 
