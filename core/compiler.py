@@ -13,6 +13,7 @@ import sqlite3
 import random
 from datetime import datetime
 import subprocess
+from .token_logger import log as token_log
 from pathlib import Path
 
 # Import dynamic pipeline assembler
@@ -112,6 +113,7 @@ MESSAGE assistant "Systems are green across the board, Bobby. Local database con
             check=True
         )
         print("[+] Ollama Core Build Successful!")
+        token_log('compiler_bake', full_system_prompt, result.stdout or "")
         if result.stdout:
             print(result.stdout)
 

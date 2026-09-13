@@ -175,7 +175,7 @@ class ProfileEvaluator:
                 if raw_output.startswith("```"):
                     raw_output = raw_output.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
                 result = json.loads(raw_output)
-                token_log('profile_evaluator', prompt_instructions + dialogue_text, result)
+                token_log('profile_evaluator', prompt_instructions + dialogue_text, json.dumps(result))
                 metrics = result.get("metrics", []) if isinstance(result, dict) else []
             except Exception as e:
                 print(f"[-] ProfileEvaluator: Local Ollama generation failed: {e}", file=sys.stderr)
@@ -213,6 +213,7 @@ class ProfileEvaluator:
                             result = json.loads(result)
                         except Exception:
                             pass
+                    token_log('profile_evaluator_gemini', prompt_instructions + dialogue_text, json.dumps(result))
                     metrics = result.get("metrics", []) if isinstance(result, dict) else []
             except Exception as e:
                 print(f"[-] ProfileEvaluator: Cloud Gemini evaluation failed: {e}", file=sys.stderr)

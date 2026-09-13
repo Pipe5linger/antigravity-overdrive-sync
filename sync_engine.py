@@ -2,6 +2,8 @@ import os
 import sys
 import sqlite3
 import subprocess
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from core.token_logger import log as token_log
 from pathlib import Path
 
 # Base Path Resolution (Target: D:\AI\Projects\antigravity-overdrive-sync)
@@ -26,6 +28,8 @@ def auto_rebuild_ollama_model(model_name: str = MODEL_NAME, modelfile_path: Path
             cwd=str(BASE_DIR)
         )
         print(f"\n[+] [Ollama Hook] Model '{model_name}' rebuilt successfully!")
+        modelfile_content = modelfile_path.read_text(encoding="utf-8") if modelfile_path.exists() else ""
+        token_log('sync_engine_rebuild', modelfile_content, f"ollama create {model_name} OK")
 
     except subprocess.CalledProcessError as e:
         print(f"\n[-] [Ollama Hook] Build failed with exit code {e.returncode}")
