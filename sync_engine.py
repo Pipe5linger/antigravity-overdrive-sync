@@ -7,9 +7,9 @@ from core.token_logger import log as token_log
 from pathlib import Path
 
 # Base Path Resolution (Target: D:\AI\Projects\antigravity-overdrive-sync)
-BASE_DIR = Path(__file__).parent.resolve()
+BASE_DIR = Path(__file__).resolve().parent
 DB_PATH = BASE_DIR / "db" / "sync_state.db"
-MODELFILE_PATH = BASE_DIR / "Modelfile"
+MODELFILE_PATH = BASE_DIR / "modelfiles" / "Modelfile"
 MODEL_NAME = "vespera"
 
 
