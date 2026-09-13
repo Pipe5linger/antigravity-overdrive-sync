@@ -4,6 +4,7 @@ import sys
 import json
 import asyncio
 import httpx
+from .token_logger import log as token_log
 import sqlite3
 import urllib.request
 import urllib.parse
@@ -146,6 +147,7 @@ class ProfileEvaluator:
                 response.raise_for_status()
                 raw_output = response.json()["choices"][0]["message"]["content"].strip()
                 result = json.loads(raw_output)
+                token_log('profile_evaluator', prompt_instructions + dialogue_text, json.dumps(result))
                 metrics = result.get("metrics", []) if isinstance(result, dict) else []
             except Exception as e:
                 print(f"[-] ProfileEvaluator: Local KoboldCpp generation failed: {e}", file=sys.stderr)
@@ -173,6 +175,7 @@ class ProfileEvaluator:
                 if raw_output.startswith("```"):
                     raw_output = raw_output.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
                 result = json.loads(raw_output)
+                token_log('profile_evaluator', prompt_instructions + dialogue_text, result)
                 metrics = result.get("metrics", []) if isinstance(result, dict) else []
             except Exception as e:
                 print(f"[-] ProfileEvaluator: Local Ollama generation failed: {e}", file=sys.stderr)

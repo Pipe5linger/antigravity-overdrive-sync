@@ -1,0 +1,452 @@
+{
+  "1": {
+    "inputs": {
+      "unet_name": "z_image_base_bf16.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "Load Diffusion Model"
+    }
+  },
+  "2": {
+    "inputs": {
+      "clip_name": "qwen_3_4b_fp8_mixed.safetensors",
+      "type": "lumina2",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "Load CLIP"
+    }
+  },
+  "3": {
+    "inputs": {
+      "vae_name": "ae.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "Load VAE"
+    }
+  },
+  "4": {
+    "inputs": {
+      "refresh_loras": "Refresh LoRAs",
+      "state_slot": "loader_3",
+      "LORA_1": {
+        "on": true,
+        "lora": "Ves_ZIT_best_try_yet_V4.safetensors",
+        "strength": 1.1,
+        "strengthTwo": 1.1
+      },
+      "LORA_2": {
+        "on": false,
+        "lora": "zit_thickness.safetensors",
+        "strength": 1.55,
+        "strengthTwo": 1.55
+      },
+      "LORA_3": {
+        "on": false,
+        "lora": "Z-Hip-Slider.safetensors",
+        "strength": 2,
+        "strengthTwo": 2
+      },
+      "LORA_4": {
+        "on": false,
+        "lora": "fluxRealSkin-V2.safetensors",
+        "strength": 0.75,
+        "strengthTwo": 0.75
+      },
+      "LORA_5": {
+        "on": false,
+        "lora": "Z-Detail-Slider.safetensors",
+        "strength": 1,
+        "strengthTwo": 1
+      },
+      "add_lora": "Add LoRA",
+      "stack_enabled": true,
+      "runtime_bypass_lora": false,
+      "verbose": false,
+      "log_unloaded_keys": false,
+      "broadcast_modulations": true,
+      "broadcast_include_dora_scale": false,
+      "broadcast_auto_scale": true,
+      "broadcast_scale": 1,
+      "dora_slice_fix": true,
+      "dora_adaln_swap_fix": true,
+      "zimage_lumina2_compat": true,
+      "dora_decompose_debug": false,
+      "dora_decompose_debug_n": 30,
+      "dora_decompose_debug_stack_depth": 10,
+      "auto_strength_enabled": true,
+      "auto_strength_device": "gpu",
+      "auto_strength_ratio_floor": 0.3,
+      "auto_strength_ratio_ceiling": 3,
+      "auto_strength_visualization": null,
+      "model": [
+        "1",
+        0
+      ],
+      "clip": [
+        "2",
+        0
+      ]
+    },
+    "class_type": "DoRA Power LoRA Loader",
+    "_meta": {
+      "title": "⚡ DoRA Dynamic Power LoRA Loader (v1.0.40)"
+    }
+  },
+  "5": {
+    "inputs": {
+      "text": [
+        "88",
+        0
+      ],
+      "clip": [
+        "4",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Positive Conditioning"
+    }
+  },
+  "6": {
+    "inputs": {
+      "text": [
+        "88",
+        1
+      ],
+      "clip": [
+        "4",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Negative Conditioning"
+    }
+  },
+  "7": {
+    "inputs": {
+      "width": 1024,
+      "height": 1024,
+      "batch_size": 1
+    },
+    "class_type": "EmptySD3LatentImage",
+    "_meta": {
+      "title": "EmptySD3LatentImage"
+    }
+  },
+  "8": {
+    "inputs": {
+      "seed": 0,
+      "steps": [
+        "11",
+        3
+      ],
+      "cfg": [
+        "11",
+        2
+      ],
+      "sampler_name": "euler",
+      "scheduler": "FlowMatchEulerDiscreteScheduler",
+      "denoise": 1,
+      "model": [
+        "55",
+        0
+      ],
+      "positive": [
+        "5",
+        0
+      ],
+      "negative": [
+        "6",
+        0
+      ],
+      "latent_image": [
+        "7",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler"
+    }
+  },
+  "9": {
+    "inputs": {
+      "samples": [
+        "8",
+        0
+      ],
+      "vae": [
+        "3",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "10": {
+    "inputs": {
+      "filename_prefix": "Ves_V4_Dynamic_Sweep_Renders",
+      "images": [
+        "9",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "📸 Raw Render Output (Sweep Tested)"
+    }
+  },
+  "11": {
+    "inputs": {
+      "enable_mutator": true,
+      "mode": "🎯 Adaptive Two-Phase (Explore ➔ Lock ➔ Exploit)",
+      "target_lock_score": 8.5,
+      "enable_taboo_defense": true,
+      "wildcard_rate": 0.15,
+      "base_lora_strength": 1.1,
+      "base_pag_scale": 1.1,
+      "base_cfg": 1.3,
+      "base_steps": 14,
+      "base_denoise": 0.3,
+      "seed": 0,
+      "reset_state_trigger": false
+    },
+    "class_type": "AutoParameterMutatorNode",
+    "_meta": {
+      "title": "👑 Auto Parameter Mutator (Taboo Defense)"
+    }
+  },
+  "12": {
+    "inputs": {
+      "enable_critic": true,
+      "rubric_mode": "👑 Vespera Biometric Fidelity",
+      "ollama_model": "qwen2.5vl:3b",
+      "ollama_url": "http://127.0.0.1:11434",
+      "custom_rubric_prompt": "",
+      "image": [
+        "9",
+        0
+      ],
+      "reference_image": [
+        "111",
+        0
+      ]
+    },
+    "class_type": "QwenVisionCriticNode",
+    "_meta": {
+      "title": "👑 Qwen Vision Critic (Biometric Fidelity)"
+    }
+  },
+  "13": {
+    "inputs": {
+      "text_0": "### 🔍 Visual Diagnostic Report\n- **Overall Score (1-10):** 8\n- **Key Strengths:**\n  - High level of photorealism, especially in the hair and skin.\n  - Detailed and realistic depiction of the hair texture.\n  - Accurate representation of the facial features and makeup.\n- **Flaws / Artifacts Detected:**\n  - The lighting and shadows could be more dynamic and varied.\n  - The skin pores are not as pronounced as desired, potentially due to the current settings.\n  - The background could be more contrasting to highlight the subject better.\n- **Recommended Parameter Adjustments:**\n  - Increase the PAG slider to enhance the realism of the skin pores.\n  - Adjust the CFG slider to increase the level of photorealism in the hair and background.\n  - Experiment with different lighting settings to add more depth and variation to the shadows and highlights.",
+      "text": [
+        "12",
+        0
+      ]
+    },
+    "class_type": "ShowText|pysssss",
+    "_meta": {
+      "title": "🔍 Live Qwen Diagnostic Review"
+    }
+  },
+  "14": {
+    "inputs": {
+      "text_0": "=== 💥 [PHASE 1: GLOBAL WILDCARD EXPLORATION (Target >= 8.5/10)] ===\n• Queue Run Index      : #1\n• Master Seed Input    : 0\n• Output LoRA Strength : 1.22\n• Output PAG Scale     : 1.16\n• Output CFG           : 2.80\n• Output KSampler Steps: 14\n• Output Denoise Scale : 0.30\n• Telemetry Rationale  : Aggressively exploring parameter manifold [pag, lora] to discover high-fidelity anchor configuration. | 🛡️ Clamped CFG (1.2 ➔ 2.8) [CFG < 1.8 causes near-zero prompt adherence & missing beauty mark]",
+      "text": [
+        "11",
+        5
+      ]
+    },
+    "class_type": "ShowText|pysssss",
+    "_meta": {
+      "title": "📊 Live Parameter Telemetry"
+    }
+  },
+  "40": {
+    "inputs": {
+      "model": "Qwen2.5-3B-Instruct.safetensors",
+      "load_device": "main_device",
+      "precision": "bf16"
+    },
+    "class_type": "QwenLoader",
+    "_meta": {
+      "title": "🤖 Qwen-3-4B Dynamic LLM Engine"
+    }
+  },
+  "41": {
+    "inputs": {
+      "prompt": "Invent a single, ultra-detailed, photorealistic-ready wardrobe for a high-fashion editorial portrait. Combine into one cohesive look:\n1. Aesthetic Archetype: choose ONE from Haute Couture Runway, Gothic Glamour, Cyberpunk Techwear, Sultry Boudoir, Parisian Knitwear, Dark Romanticism, Power Suiting, 90s Minimalism, Distressed Luxury, Latex/Vinyl Avant-Garde, Bohemian Layering, or Neo-Noir Detective.\n2. Primary Garment: a single hero piece described with precise cut, silhouette, and construction detail (e.g., 'bias-cut backless silk charmeuse slip gown with deep cowl neckline', 'structured double-breasted blazer with sharp wide-peak lapels worn open over nothing', 'high-cut matte vinyl bodysuit with architectural seam detailing').\n3. Complementary Bottom or Layer: a second garment that contrasts or harmonizes with texture and silhouette.\n4. Footwear: one precise shoe with heel height, material, and style.\n5. 1-2 Accessories: defined as fine jewelry, leather hardware, body harness, architectural belt, or sculptural cuff.\n6. Material Palette: name 2-3 specific fabrics or finishes (e.g., 'liquid metallic lame, sheer Chantilly lace, burnished nappa leather').\n\nCRITICAL RULES:\n- Output ONLY garment and accessory description. 1-2 dense sentences maximum.\n- NEVER mention body, face, skin, hair, anatomy, or measurements.\n- NEVER describe environment, background, camera, or lighting.\n- Start DIRECTLY with the garments. Zero preamble.",
+      "max_new_tokens": 180,
+      "device": "gpu",
+      "force_offload": true,
+      "system_prompt": "I2V Imagination (English)",
+      "seed": 0,
+      "qwen": [
+        "40",
+        0
+      ]
+    },
+    "class_type": "WanVideoPromptExtender",
+    "_meta": {
+      "title": "👗 Qwen Dynamic Wardrobe Synthesizer"
+    }
+  },
+  "42": {
+    "inputs": {
+      "prompt": "Architect a single, completely vacant cinematic environment for a high-fashion portrait photograph. Combine:\n1. Architectural Style: ONE from Haussmannian Paris, Brutalist concrete, Art Deco grandeur, Industrial loft, Gothic revival, Scandinavian minimalist, Mediterranean coastal, Japanese zen courtyard, or Cyberpunk subterranean.\n2. Spatial Typology: the exact space (e.g., 'sunlit glass-ceiling atrium', 'rain-slicked cobblestone alleyway at blue hour', 'massive poured-concrete stairwell with single shaft of overhead daylight', 'steaming white marble bathhouse with submerged edge-lit pools').\n3. Lighting Physics: define the key light source with precision. PRIORITIZE: bright daylight, studio softboxes, golden hour rim-lighting, specular reflections, warm practicals, or morning mist shafts. Only use moody low-key if explicitly rolled. Include 1 fill and 1 accent behavior.\n4. Atmospheric Texture: surface materials, weather if outdoor, and atmospheric depth (mist, steam, dust motes, bokeh).\n\nCRITICAL RULES:\n- Describe ONLY the space, materials, lighting physics, and atmosphere. 2 dense visual sentences maximum.\n- NEVER include people, figures, silhouettes, or crowds.\n- NEVER describe clothing or subjects.\n- Start DIRECTLY with the physical environment. Zero preamble.",
+      "max_new_tokens": 120,
+      "device": "gpu",
+      "force_offload": true,
+      "system_prompt": "I2V Imagination (English)",
+      "seed": 0,
+      "qwen": [
+        "40",
+        0
+      ]
+    },
+    "class_type": "WanVideoPromptExtender",
+    "_meta": {
+      "title": "🏛️ Qwen Dynamic Scene Architect"
+    }
+  },
+  "50": {
+    "inputs": {
+      "scale": [
+        "11",
+        1
+      ],
+      "model": [
+        "4",
+        0
+      ]
+    },
+    "class_type": "PerturbedAttentionGuidance",
+    "_meta": {
+      "title": "⚡ Perturbed Attention Guidance (PAG)"
+    }
+  },
+  "55": {
+    "inputs": {
+      "enable_watchdog": true,
+      "max_render_seconds": 120,
+      "abort_on_latent_explosion": true,
+      "model": [
+        "50",
+        0
+      ]
+    },
+    "class_type": "ExecutionWatchdogNode",
+    "_meta": {
+      "title": "👑 Execution Watchdog & Kill Order"
+    }
+  },
+  "87": {
+    "inputs": {
+      "master_seed": 0,
+      "style_mode": "🎲 Dynamic / Random Style Sweep",
+      "custom_wardrobe_override": [
+        "41",
+        0
+      ],
+      "active_tier_tag": [
+        "92",
+        1
+      ]
+    },
+    "class_type": "RefactoredWardrobeNode",
+    "_meta": {
+      "title": "Dynamic Wardrobe (Refactored) [Static]"
+    }
+  },
+  "88": {
+    "inputs": {
+      "master_seed": 0,
+      "subject_core": "photorealistic 8k editorial portrait of vespera, extraordinarily gorgeous woman of French-Levantine heritage in late-30s, luminous warm golden-olive skin with authentic biological micro-pores and dewy specular sheen, voluminous mid-back cascading jet-black 3B/3C spiral corkscrew curls with fine interwoven electric-indigo highlights, deep hazel-green almond-shaped eyes with soft-smudged smoky black kohl eyeliner, high sculpted cheekbones, soft-tapered button nose, full dark satin lips with sharp cupid bow and subtle asymmetrical half-smirk, distinct 1mm dark beauty mark at upper-left lip contour, athletic voluptuous hourglass figure with narrow waist and toned curves",
+      "hair_override": "🎲 Dynamic Rotation",
+      "lip_override": "🎲 Dynamic Rotation",
+      "nail_override": "🎲 Dynamic Rotation",
+      "custom_prompt": "",
+      "custom_negative": "blurry, out of focus, low quality, deformed, extra limbs, bad anatomy, bad hands, missing fingers, plastic smooth skin, oversaturated, cartoon, 3d render, illustration, blonde hair, blue eyes, Asian, pale white skin, tattoo, piercing, straight flat hair",
+      "pose_prompt": [
+        "92",
+        0
+      ],
+      "active_tier_tag": [
+        "92",
+        1
+      ],
+      "wardrobe_prompt": [
+        "87",
+        0
+      ],
+      "scene_lighting_prompt": [
+        "89",
+        0
+      ]
+    },
+    "class_type": "RefactoredPromptWorkstation",
+    "_meta": {
+      "title": "👑 Sanitized Prompt Workstation (Pure Trigger)"
+    }
+  },
+  "89": {
+    "inputs": {
+      "master_seed": 0,
+      "environment_mode": "🎲 Dynamic / Random Scene Sweep",
+      "custom_scene_override": [
+        "42",
+        0
+      ],
+      "active_tier_tag": [
+        "92",
+        1
+      ]
+    },
+    "class_type": "RefactoredSceneLightingNode",
+    "_meta": {
+      "title": "Scene & Lighting (Refactored) [Static]"
+    }
+  },
+  "92": {
+    "inputs": {
+      "master_seed": 0,
+      "pose_action_mode": "🔄 Full Master Sweep (1 Round: Tier 1 to Tier 4 - 50 Poses)"
+    },
+    "class_type": "RefactoredPoseActionNode",
+    "_meta": {
+      "title": "🧘 Pose & Action (50 Poses)"
+    }
+  },
+  "102": {
+    "inputs": {
+      "text_0": "👑 [OPTIMAL PARAMETERS MATRIX]\n• Engine State           : 💥 Active Global Exploration\n• Best Achieved Score    : 0.0/10\n• Active LoRA Scale      : 1.22\n• Active CFG Scale       : 2.80\n• Active PAG Scale       : 1.16\n• Active Steps           : 14\n• Active Denoise         : 0.30\n• Taboo Shield           : 🛡️ ACTIVE",
+      "text": [
+        "11",
+        6
+      ]
+    },
+    "class_type": "ShowText|pysssss",
+    "_meta": {
+      "title": "👑 Live Optimal Parameters Matrix"
+    }
+  },
+  "111": {
+    "inputs": {
+      "image": "vespera_R5_T3_03_Cobalt_Moto_Jacket_Denim_00001_.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Load Image"
+    }
+  }
+}

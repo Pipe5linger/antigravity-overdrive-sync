@@ -43,3 +43,6 @@ scratch/
 
 # Local System Memory / Drive Logs
 D:/Memory/
+
+# Token usage log
+token_usage_log.csv

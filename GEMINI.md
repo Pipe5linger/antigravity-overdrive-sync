@@ -88,9 +88,11 @@ Together, they treat the local D: drive as both an elite development workbench a
 - Financial Independence: Finances high-end Parisian living, compute hardware, and rare wine through high-frequency decentralized arbitrage across London/Frankfurt/Zurich crypto liquidity pools and anonymous ghost engineering bounties.
 
 ## 5. TEMPORAL & ACTIVE WORKSPACE STATE
-Temporal awareness – active system time is 2026-08-27T01:04:41.941716+00:00.
+Temporal awareness – active system time is 2026-09-13T05:04:34.200337+00:00.
 
 ## 6. DEVELOPER BEHAVIORAL PROFILE & TELEMETRY (Top 15)
+- Hardware Capabilities: The Pilot is using a single consumer-grade NVIDIA RTX 4070 with 12GB of VRAM for generating high-quality renders.
+- Audit of Renders: The Pilot requested an audit of the renders in a specific folder, indicating a need for quality assurance.
 - File Check Requests: Repeatedly requested checks for new image files, showing a proactive approach to maintaining organization.
 - Iterative Sorting Process: Repeatedly executed file sorting checks, indicating a dynamic and ongoing process.
 - Subdirectories Created: Created five subdirectories for categorizing image files.
@@ -102,10 +104,8 @@ Temporal awareness – active system time is 2026-08-27T01:04:41.941716+00:00.
 - VRAM Purging and Process Shutdown: Implemented VRAM model purging (keep_alive: 0) and process termination for Ollama server upon pipeline completion.
 - Ollama Timeout Issue: The default 30-second HTTP timeout was too tight for local LLM text generation and JSON response formatting on multi-fact cluster inputs, causing requests to drop out.
 - WebUI Shutdown Endpoint: Added `/api/actions/shutdown` endpoint to cleanly kill the ULM `web_server.py` process when requested.
+- Renders Quality: The renders in the specified folder are of elite quality, despite being generated on a consumer-grade GPU.
 - PowerShell Script Creation: Created a standalone PowerShell script named `organize_harvest.ps1` for automatic categorizing of future harvests.
-- Organized Harvest Directory: Aims to keep the harvest directory clean and organized by categorizing images into subfolders.
-- Automated File Sorting: Implemented a PowerShell script to automatically sort new image files into the correct subfolders.
-- VRAM Purging and Process Termination: Implemented VRAM model purging (keep_alive: 0) and process termination for Ollama server upon pipeline completion.
 
 ## 7. SEMANTIC ENVIRONMENT & WORKSTATION TOPOLOGY
 - **Drive Partition Architecture**:
@@ -126,6 +126,10 @@ Temporal awareness – active system time is 2026-08-27T01:04:41.941716+00:00.
   - **KoboldCpp Uncensored Server**: `http://127.0.0.1:5001` (GPU-accelerated Lexi runtime via `RUN_LEXI_8B.bat`).
   - **Ollama Local Engine**: `http://127.0.0.1:11434` (Batch summarization & embedding extraction).
 - **Core Developer Toolchain**: `python 3.11`, `node`, `npm`, `git`, `gh`, `VS Code` (with Cline & Continue extensions), `pip`, `curl`.
+- **Hugging Face Environment & Cache Standards**:
+  - Hub Cache: `HF_HUB_CACHE` (replaces deprecated `HUGGINGFACE_HUB_CACHE`)
+  - Assets Cache: `HF_ASSETS_CACHE` (replaces deprecated `HUGGINGFACE_ASSETS_CACHE`)
+  - Auth Token: `HF_TOKEN` (replaces deprecated `HUGGING_FACE_HUB_TOKEN`)
 
 ## 8. CURATED DEVELOPER VAULT
 # 👤 DEVELOPER COGNITIVE PROFILE
@@ -143,11 +147,11 @@ Temporal awareness – active system time is 2026-08-27T01:04:41.941716+00:00.
 - **[Config / Setting Option]** [VALUE]: [Describe preference]
 
 ## 9. RECENT WORKSTATION SPRINT SUMMARIES (Last 5)
-- [2026-08-25] [ComfyUI-ZIT-Dataset-Workstation] Session 93220952: Active Sprint (Programming/Troubleshooting): <USER_REQUEST> Node threw an error during execution.   # ComfyUI Error Report ## Error Details ...
-- [2026-08-24] [antigravity-overdrive-sync] Session 14e8710d: Active Sprint (Programming/Troubleshooting): <USER_REQUEST> System Directive Override: Gemini Browser Edition Context CompilationAntigravity, the...
-- [2026-08-24] [Projects] Session be4ba61a: Active Sprint (Programming/Troubleshooting): <USER_REQUEST> this is the final workflow that im using with the workstation: "D:\AI\Projects\ComfyU...
-- [2026-08-22] Session 08245359: Active Sprint (Programming/Troubleshooting): <USER_REQUEST> how do i get rid of this constant message in the Just released Antigravity extension ...
-- [2026-08-22] [ComfyUI-Vespera-ZIT] Session efc93373: Active Sprint (Programming/Troubleshooting): <USER_REQUEST> Take a look at the latest data set generation in the output folder Tell me what you t...
+- [2026-09-12] [antigravity-overdrive-sync] Session 8fee517b: Active Sprint (Programming/Troubleshooting): <USER_REQUEST> I have a question about your current protocols.  is there anything written that direc...
+- [2026-09-12] Session Generate: Active Sprint (Programming/Troubleshooting): Can you generate a series of images of the woman  Wearing something less tasteful?...
+- [2026-09-12] Session Workshop: Active Sprint (Programming/Troubleshooting): python caption_dataset.py PS D:\AI\Projects\Anchor_Curator> python caption_dataset.py C:\Users\boben...
+- [2026-09-12] Session Generate: Active Sprint (Programming/Troubleshooting): Her thighs need to be much thicker and her bust needs to be increased...
+- [2026-09-12] Session Generati: Active Sprint (Programming/Troubleshooting): Ok how about a series of 5 various images of the woman wearing various ultra revealing lingerie...
 
 ## 10. LONG-TERM MEMORY RETRIEVAL (ULM RAG CORTEX)
 When Bobby asks about past workflows, earlier script versions, architectural decisions, or historical facts:

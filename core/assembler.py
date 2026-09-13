@@ -207,7 +207,11 @@ class DynamicPromptAssembler:
             "  - **ULM REST API & Memory Daemon**: `http://127.0.0.1:8890` (`/api/recall`, `/api/health`, `/api/actions/shutdown`).\n"
             "  - **KoboldCpp Uncensored Server**: `http://127.0.0.1:5001` (GPU-accelerated Lexi runtime via `RUN_LEXI_8B.bat`).\n"
             "  - **Ollama Local Engine**: `http://127.0.0.1:11434` (Batch summarization & embedding extraction).\n"
-            "- **Core Developer Toolchain**: `python 3.11`, `node`, `npm`, `git`, `gh`, `VS Code` (with Cline & Continue extensions), `pip`, `curl`."
+            "- **Core Developer Toolchain**: `python 3.11`, `node`, `npm`, `git`, `gh`, `VS Code` (with Cline & Continue extensions), `pip`, `curl`.\n"
+            "- **Hugging Face Environment & Cache Standards**:\n"
+            "  - Hub Cache: `HF_HUB_CACHE` (replaces deprecated `HUGGINGFACE_HUB_CACHE`)\n"
+            "  - Assets Cache: `HF_ASSETS_CACHE` (replaces deprecated `HUGGINGFACE_ASSETS_CACHE`)\n"
+            "  - Auth Token: `HF_TOKEN` (replaces deprecated `HUGGING_FACE_HUB_TOKEN`)"
         )
 
     def build_identity_header(self, purge_mirrors: bool = False) -> str:

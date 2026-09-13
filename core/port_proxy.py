@@ -3,7 +3,8 @@ import http.server
 import socketserver
 import urllib.request
 import urllib.error
-import json
+import os
+from .token_logger import log as token_log
 import time
 import uuid
 
@@ -177,7 +178,7 @@ class ProxyHandler(http.server.BaseHTTPRequestHandler):
         result = self.query_qwen_space(user_prompt, system_prompt)
         
         # Build standard OpenAI response structure
-        response_data = {
+        token_log('port_proxy', user_prompt, result)
             "id": f"chatcmpl-{uuid.uuid4().hex[:10]}",
             "object": "chat.completion",
             "created": int(time.time()),

@@ -66,6 +66,30 @@ class GeminiNormalizer:
             
         try:
             data = json.loads(file_content)
+            # Support Google AI Studio exported prompts (chunkedPrompt format)
+            if isinstance(data, dict) and "chunkedPrompt" in data:
+                chunks = data.get("chunkedPrompt", {}).get("chunks", [])
+                for chunk in chunks:
+                    if not isinstance(chunk, dict):
+                        continue
+                    if chunk.get("isThought", False):
+                        continue
+                    role = chunk.get("role", "")
+                    text = (chunk.get("text") or "").strip()
+                    if not text and "driveDocument" in chunk:
+                        doc = chunk.get("driveDocument", {})
+                        title = doc.get("title", "Attached File")
+                        text = f"[Attached Drive Document: {title}]"
+                    
+                    if len(text) > 5:
+                        sender = "Pilot" if role == "user" else "Vespera"
+                        normalized.append({
+                            "sender": sender,
+                            "text": text,
+                            "timestamp": chunk.get("createTime") or datetime.now().isoformat()
+                        })
+                return normalized, None
+
             # Handle object with 'messages' list (Gemini Exporter) or raw array
             entries = data.get("messages", []) if isinstance(data, dict) else (data if isinstance(data, list) else [])
             
