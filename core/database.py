@@ -308,6 +308,36 @@ class ULMDatabase:
 
                     c.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (10)")
 
+                if current_version < 11:
+                    # Phase 6: Procedural Graphs & Triplet Relational Mapping
+                    try:
+                        c.execute("""
+                            CREATE TABLE IF NOT EXISTS procedures (
+                                node_id TEXT PRIMARY KEY,
+                                action_name TEXT NOT NULL,
+                                target_script_path TEXT,
+                                expected_outcome TEXT,
+                                last_execution_status TEXT,
+                                updated_at TEXT
+                            );
+                        """)
+                        c.execute("""
+                            CREATE TABLE IF NOT EXISTS procedural_relations (
+                                edge_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                                source_node_id TEXT NOT NULL,
+                                relation_type TEXT NOT NULL,
+                                target_node_id TEXT NOT NULL,
+                                condition_logic TEXT,
+                                FOREIGN KEY (source_node_id) REFERENCES procedures(node_id),
+                                FOREIGN KEY (target_node_id) REFERENCES procedures(node_id)
+                            );
+                        """)
+                        c.execute("CREATE INDEX IF NOT EXISTS idx_procedural_relations_source ON procedural_relations(source_node_id);")
+                        c.execute("CREATE INDEX IF NOT EXISTS idx_procedural_relations_target ON procedural_relations(target_node_id);")
+                        c.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (11)")
+                    except Exception as e:
+                        print(f"[-] Warning creating procedural graph tables: {e}")
+
                 # Always ensure profiled_at column exists (safe migration)
                 try:
                     c.execute("ALTER TABLE sessions ADD COLUMN profiled_at TEXT;")
@@ -775,3 +805,126 @@ class ULMDatabase:
         except sqlite3.Error as e:
             print(f"[-] Error cleaning orphan embeddings: {e}")
             return 0
+
+    # =========================================================================
+    # Procedural Graph & Execution Triplet Interface
+    # =========================================================================
+
+    def add_procedure(self, node_id, action_name, target_script_path=None, expected_outcome=None, last_execution_status=None):
+        """Adds or updates a procedure node in the procedural graph."""
+        now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        try:
+            with self.get_connection() as conn:
+                c = conn.cursor()
+                c.execute("""
+                    INSERT INTO procedures (node_id, action_name, target_script_path, expected_outcome, last_execution_status, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(node_id) DO UPDATE SET
+                        action_name = excluded.action_name,
+                        target_script_path = COALESCE(excluded.target_script_path, procedures.target_script_path),
+                        expected_outcome = COALESCE(excluded.expected_outcome, procedures.expected_outcome),
+                        last_execution_status = COALESCE(excluded.last_execution_status, procedures.last_execution_status),
+                        updated_at = excluded.updated_at
+                """, (node_id, action_name, target_script_path, expected_outcome, last_execution_status, now))
+                conn.commit()
+                return True
+        except sqlite3.Error as e:
+            print(f"[-] Error adding procedure '{node_id}': {e}")
+            return False
+
+    def add_relation(self, source_node_id, relation_type, target_node_id, condition_logic=None):
+        """Adds a relational edge between two procedure nodes if not already present."""
+        try:
+            with self.get_connection() as conn:
+                c = conn.cursor()
+                c.execute("""
+                    SELECT edge_id FROM procedural_relations
+                    WHERE source_node_id = ? AND relation_type = ? AND target_node_id = ?
+                """, (source_node_id, relation_type, target_node_id))
+                row = c.fetchone()
+                if row:
+                    return row[0]
+                c.execute("""
+                    INSERT INTO procedural_relations (source_node_id, relation_type, target_node_id, condition_logic)
+                    VALUES (?, ?, ?, ?)
+                """, (source_node_id, relation_type, target_node_id, condition_logic))
+                conn.commit()
+                return c.lastrowid
+        except sqlite3.Error as e:
+            print(f"[-] Error adding relation ({source_node_id} -[{relation_type}]-> {target_node_id}): {e}")
+            return None
+
+    def get_procedure(self, node_id):
+        """Fetches a specific procedure node by ID."""
+        try:
+            with self.get_connection() as conn:
+                conn.row_factory = sqlite3.Row
+                c = conn.cursor()
+                c.execute("SELECT * FROM procedures WHERE node_id = ?", (node_id,))
+                row = c.fetchone()
+                return dict(row) if row else None
+        except sqlite3.Error as e:
+            print(f"[-] Error fetching procedure '{node_id}': {e}")
+            return None
+
+    def get_next_procedures(self, source_node_id, relation_type=None):
+        """Retrieves adjacent target procedure nodes given a source node and optional relation filter."""
+        try:
+            with self.get_connection() as conn:
+                conn.row_factory = sqlite3.Row
+                c = conn.cursor()
+                if relation_type:
+                    c.execute("""
+                        SELECT p.*, r.edge_id, r.relation_type, r.condition_logic
+                        FROM procedural_relations r
+                        JOIN procedures p ON r.target_node_id = p.node_id
+                        WHERE r.source_node_id = ? AND r.relation_type = ?
+                    """, (source_node_id, relation_type))
+                else:
+                    c.execute("""
+                        SELECT p.*, r.edge_id, r.relation_type, r.condition_logic
+                        FROM procedural_relations r
+                        JOIN procedures p ON r.target_node_id = p.node_id
+                        WHERE r.source_node_id = ?
+                    """, (source_node_id,))
+                return [dict(row) for row in c.fetchall()]
+        except sqlite3.Error as e:
+            print(f"[-] Error getting next procedures for '{source_node_id}': {e}")
+            return []
+
+    def update_procedure_status(self, node_id, status):
+        """Updates the execution status of a procedure node."""
+        now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        try:
+            with self.get_connection() as conn:
+                c = conn.cursor()
+                c.execute("UPDATE procedures SET last_execution_status = ?, updated_at = ? WHERE node_id = ?", (status, now, node_id))
+                conn.commit()
+                return c.rowcount > 0
+        except sqlite3.Error as e:
+            print(f"[-] Error updating procedure status '{node_id}': {e}")
+            return False
+
+    def list_procedures(self, limit=100):
+        """Lists procedures registered in the graph."""
+        try:
+            with self.get_connection() as conn:
+                conn.row_factory = sqlite3.Row
+                c = conn.cursor()
+                c.execute("SELECT * FROM procedures ORDER BY updated_at DESC LIMIT ?", (limit,))
+                return [dict(row) for row in c.fetchall()]
+        except sqlite3.Error as e:
+            print(f"[-] Error listing procedures: {e}")
+            return []
+
+    def list_relations(self, limit=100):
+        """Lists procedural relational edges."""
+        try:
+            with self.get_connection() as conn:
+                conn.row_factory = sqlite3.Row
+                c = conn.cursor()
+                c.execute("SELECT * FROM procedural_relations ORDER BY edge_id DESC LIMIT ?", (limit,))
+                return [dict(row) for row in c.fetchall()]
+        except sqlite3.Error as e:
+            print(f"[-] Error listing relations: {e}")
+            return []

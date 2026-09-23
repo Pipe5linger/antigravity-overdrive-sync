@@ -97,15 +97,43 @@ class GeminiNormalizer:
                 if not isinstance(entry, dict):
                     continue
                 role = entry.get("role", "")
-                text = (entry.get("say") or entry.get("content") or entry.get("text") or "").strip()
+                contents = entry.get("contents", [])
+                text = ""
                 
-                # Filter noise & empty system stubs
-                if len(text) > 10:
+                # Check for Gemini Exporter structured contents array
+                if contents and isinstance(contents, list):
+                    parts = []
+                    for c in contents:
+                        if isinstance(c, dict):
+                            if c.get("type") == "text":
+                                parts.append(c.get("content", ""))
+                            elif c.get("type") == "attachment":
+                                att = c.get("attachment", {})
+                                name = att.get("name", "file")
+                                parts.append(f"[Attached: {name}]")
+                    text = "\n".join(parts).strip()
+                
+                if not text:
+                    text = (entry.get("say") or entry.get("content") or entry.get("text") or "").strip()
+                
+                if len(text) > 0:
                     sender = "Pilot" if role in ["user", "Prompt", "user_feedback"] else "Vespera"
+                    ts_raw = entry.get("time") or entry.get("created_at") or entry.get("ts")
+                    timestamp = None
+                    if ts_raw:
+                        for fmt in ["%m/%d/%Y %H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S"]:
+                            try:
+                                timestamp = datetime.strptime(ts_raw, fmt).isoformat()
+                                break
+                            except Exception:
+                                pass
+                    if not timestamp:
+                        timestamp = ts_raw if ts_raw else datetime.now().isoformat()
+                    
                     normalized.append({
                         "sender": sender,
                         "text": text,
-                        "timestamp": entry.get("created_at") or entry.get("ts") or datetime.now().isoformat()
+                        "timestamp": timestamp
                     })
         except json.JSONDecodeError:
             print("[-] GeminiNormalizer: Failed to parse JSON.")

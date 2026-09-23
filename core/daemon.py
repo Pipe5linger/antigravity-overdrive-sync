@@ -103,8 +103,25 @@ class ULMDaemon:
             finally:
                 self.queue.task_done()
 
+    def is_generation_active(self, ports=(8188, 7860)):
+        import socket
+        for port in ports:
+            try:
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                    s.settimeout(0.2)
+                    if s.connect_ex(("127.0.0.1", port)) == 0:
+                        return port
+            except Exception:
+                pass
+        return None
+
     async def run_sync_cycle(self):
         """Fetches logs, updates SQLite, and queues high-signal sessions for evaluation."""
+        active_port = self.is_generation_active()
+        if active_port:
+            print(f"[*] Daemon: Generation engine active on port {active_port}. Skipping sync tick to protect resources.")
+            return
+
         print("[*] Daemon: Initiating automatic synchronization cycle...")
         
         # Use to_thread for blocking I/O

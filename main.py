@@ -89,6 +89,21 @@ def backup_sqlite_to_yaml(db, engine):
     except Exception as e:
         print(f"[-] Error during backup: {e}")
 
+def check_conflicting_workloads(ports=(8188, 7860)):
+    """Check if any generation pipelines (ComfyUI on 8188, Forge on 7860) are currently active."""
+    import socket
+    active = {}
+    port_names = {8188: "ComfyUI Pipeline", 7860: "Stable Diffusion Forge"}
+    for port in ports:
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.settimeout(0.2)
+                if s.connect_ex(("127.0.0.1", port)) == 0:
+                    active[port] = port_names.get(port, f"Port {port}")
+        except Exception:
+            pass
+    return active
+
 def main():
     register_plugins()
     parser = argparse.ArgumentParser(description="Universal Local Memory (ULM) Agent Pipeline")
@@ -99,6 +114,7 @@ def main():
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--backup", action="store_true")
     parser.add_argument("--manual", action="store_true")
+    parser.add_argument("--force", action="store_true", help="Force sync even if generation workloads (ComfyUI, Forge) are active")
     parser.add_argument("--llm-model", type=str, help="Specify the exact LLM model string for the injector/parser")
     parser.add_argument("--vector-model", type=str, help="Specify the embedding model string for vectorization")
     args = parser.parse_args()
@@ -177,6 +193,15 @@ def main():
 
     elif args.command == "sync":
         async def run_sync():
+            # Check for active generation workloads (ComfyUI / Forge)
+            if not args.force:
+                active_workloads = check_conflicting_workloads()
+                if active_workloads:
+                    detected_str = ", ".join([f"{name} (port {port})" for port, name in active_workloads.items()])
+                    print(f"\n[⏸️] Active generation workload detected: {detected_str}")
+                    print("[*] Suppressing ULM sync to preserve GPU and CPU resources. (Use --force to override)\n")
+                    return
+
             print(f"\n[*] ULM Pipeline Initialized | Parser: {args.parser.upper()} | Injector: {args.injector.upper()}")
             
             parser_class = PARSERS[args.parser]
