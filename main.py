@@ -119,8 +119,9 @@ def main():
     parser.add_argument("--vector-model", type=str, help="Specify the embedding model string for vectorization")
     args = parser.parse_args()
     
+    from core.database import DEFAULT_DB_PATH
     engine = ULMEngine(llm_model=args.llm_model, vector_model=args.vector_model)
-    db_path = str(Path(engine.target_yaml).with_suffix(".db"))
+    db_path = str(DEFAULT_DB_PATH)
     db = ULMDatabase(db_path)
     db.initialize_db()
 
@@ -189,7 +190,10 @@ def main():
     elif args.command == "daemon":
         from core.daemon import ULMDaemon
         daemon = ULMDaemon()
-        daemon.start()
+        try:
+            asyncio.run(daemon.start())
+        except KeyboardInterrupt:
+            sys.exit(0)
 
     elif args.command == "sync":
         async def run_sync():

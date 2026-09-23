@@ -80,7 +80,7 @@ class ULMDaemon:
         
         try:
             injector = ClineRulesInjector()
-            if injector.inject(self.db):
+            if injector.inject(db=self.db):
                 print("[+] Daemon: Successfully refreshed Cline rule files.")
         except Exception as e:
             print(f"[-] Daemon: Rule injection failed: {e}")
@@ -94,8 +94,8 @@ class ULMDaemon:
         while True:
             s_id = await self.queue.get()
             try:
-                # Run the heavy LLM evaluation in a separate thread to avoid blocking the event loop
-                await asyncio.to_thread(evaluator.evaluate_session, self.db, s_id)
+                # Await the async evaluation directly on the loop
+                await evaluator.evaluate_session(self.db, s_id)
                 # Mark as profiled after successful evaluation
                 await asyncio.to_thread(self.db.mark_session_profiled, s_id)
             except Exception as e:

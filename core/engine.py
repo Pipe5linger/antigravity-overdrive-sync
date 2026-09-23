@@ -17,7 +17,7 @@ class ULMEngine:
         vector_model: Optional[str] = None
     ) -> None:
         if not target_yaml:
-            output_dir = Path(r"D:\AI\Projects\antigravity-overdrive-sync\db")
+            output_dir = Path(__file__).resolve().parent.parent / "db"
             if not output_dir.exists():
                 output_dir.mkdir(parents=True, exist_ok=True)
             target_yaml = str(output_dir / "sync_state.yaml")

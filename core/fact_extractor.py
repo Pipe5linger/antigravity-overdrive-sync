@@ -154,27 +154,3 @@ def extract_facts_from_text(text: str) -> List[Dict[str, Any]]:
     return extractor.extract(text)
 
 
-def extract_and_embed_facts(messages: List[dict], llm_model: str) -> Tuple[List[str], List[List[float]], List[dict]]:
-    """Extracts facts from message logs and generates fallback embeddings for legacy ingestion."""
-    documents = []
-    embeddings = []
-    metadatas = []
-
-    if not messages:
-        return ["System log recorded"], [[0.0] * 768], [{"category": "Technical", "source": "antigravity_ulm"}]
-
-    extractor = FactExtractor()
-    combined_text = "\n".join([m.get("text", "") or m.get("content", "") for m in messages if isinstance(m, dict)])
-    facts = extractor.extract(combined_text)
-
-    if not facts:
-        facts = [{"fact": "System log recorded", "category": "Technical"}]
-
-    for item in facts:
-        fact_text = item.get("fact", "System log recorded")
-        category = item.get("category", "Technical")
-        documents.append(fact_text)
-        embeddings.append([0.0] * 768)
-        metadatas.append({"category": category, "source": "antigravity_ulm"})
-
-    return documents, embeddings, metadatas

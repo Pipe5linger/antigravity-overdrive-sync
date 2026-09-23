@@ -204,14 +204,13 @@ class ProfileEvaluator:
             
             await self.limiter.consume(1)
             try:
-                req = urllib.request.Request(
+                response = await self.client.post(
                     url,
-                    data=json.dumps(payload).encode('utf-8'),
-                    headers={'Content-Type': 'application/json'},
-                    method='POST'
+                    json=payload,
+                    headers={'Content-Type': 'application/json'}
                 )
-                with urllib.request.urlopen(req, timeout=90) as response:
-                    res_data = json.loads(response.read().decode('utf-8'))
+                if response.status_code == 200:
+                    res_data = response.json()
                     raw_text = res_data['candidates'][0]['content']['parts'][0]['text'].strip()
                     result = json.loads(raw_text)
                     if isinstance(result, str):
@@ -221,6 +220,9 @@ class ProfileEvaluator:
                             pass
                     token_log('profile_evaluator_gemini', prompt_instructions + dialogue_text, json.dumps(result))
                     metrics = result.get("metrics", []) if isinstance(result, dict) else []
+                else:
+                    print(f"[-] ProfileEvaluator: Cloud Gemini returned status {response.status_code}: {response.text}", file=sys.stderr)
+                    return False
             except Exception as e:
                 print(f"[-] ProfileEvaluator: Cloud Gemini evaluation failed: {e}", file=sys.stderr)
                 return False

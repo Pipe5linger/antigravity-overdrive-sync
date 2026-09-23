@@ -2,10 +2,13 @@ import sqlite3
 import datetime
 import hashlib
 import os
+from pathlib import Path
+
+DEFAULT_DB_PATH = Path(__file__).resolve().parent.parent / "db" / "sync_state.db"
 
 class ULMDatabase:
-    def __init__(self, db_path):
-        self.db_path = db_path
+    def __init__(self, db_path=None):
+        self.db_path = str(db_path) if db_path else str(DEFAULT_DB_PATH)
 
     def get_connection(self):
         """Returns a configured connection to the SQLite database."""

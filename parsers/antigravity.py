@@ -15,12 +15,9 @@ class AntigravityParser(BaseParser):
         
         if not source_dirs:
             # 1. Try to load from database preferences
-            from core.engine import ULMEngine
-            from core.database import ULMDatabase
+            from core.database import ULMDatabase, DEFAULT_DB_PATH
             try:
-                engine = ULMEngine()
-                db_path = str(Path(engine.target_yaml).with_suffix(".db"))
-                db = ULMDatabase(db_path)
+                db = ULMDatabase(DEFAULT_DB_PATH)
                 db_pref = db.get_preference("source_dirs")
                 if db_pref:
                     source_dirs = [x.strip() for x in db_pref.split(",") if x.strip()]
@@ -213,34 +210,7 @@ class AntigravityParser(BaseParser):
         except Exception as e:
             print(f"[-] Error writing to tool_execution_logs: {e}")
 
-        try:
-            import chromadb
-        except ImportError:
-            print("[!] Optional chromadb module not found. Skipping ChromaDB vector indexing.")
-            return
-
-        print(f"[*] Starting ingestion of {len(extracted_payloads)} payloads to ChromaDB...")
-        client = chromadb.PersistentClient(path=r"E:\_Sanctuary_Backups\Scripts")
-        collection = client.get_or_create_collection(name="system_memory")
-
-        for payload in extracted_payloads:
-            if not payload.get("messages"):
-                continue
-            print(f"[+] Extracting facts for chat_id: {payload['chat_id']}")
-            try:
-                documents, embeddings, metadatas = fact_extractor.extract_and_embed_facts(payload["messages"], llm_model)
-                if documents:
-                    collection.add(
-                        documents=documents, 
-                        embeddings=embeddings, 
-                        metadatas=metadatas, 
-                        ids=[f"{payload['chat_id']}-{i}" for i in range(len(documents))]
-                    )
-                    print(f"[+] Successfully indexed {len(documents)} facts.")
-                else:
-                    print(f"[-] No facts generated for {payload['chat_id']}")
-            except Exception as e:
-                print(f"[!!!] Failed processing {payload['chat_id']}: {e}")
+        # Legacy ChromaDB zero-vector stub cleanly excised.
 
 if __name__ == "__main__":
     TARGET_LOG_DIR = r"D:\Memory\Unified_Ingest"
