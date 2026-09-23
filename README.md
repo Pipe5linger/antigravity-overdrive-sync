@@ -12,6 +12,8 @@ Welcome! This is a local, multi-threaded pipeline built to grab AI chat historie
 * **Memory Consolidation (Conflict Resolution)**: Uses a local LLM or Gemini to batch-evaluate facts periodically, pruning contradictory information, merging redundancies, and maintaining "fact aging."
 * **Context-Aware Workspace Tagging**: Automatically extracts project tags based on execution paths (`Cwd`) from your logs, prioritizing rules and memories depending on the active workspace you are coding in.
 * **Hierarchical Memory Cores**: Constructs context-rich system prompts divided into distinct tiers (Tier 1 Episodic/Temporal, Tier 2 Cognitive/Behavioral, Tier 3 Semantic/Facts) to keep active contexts clean and within tight token limits.
+* **Procedural Graph Engine**: Maps explicit developer intents directly to executable local scripts in a relational graph, providing automated playbooks for recurring workflows.
+* **Graveyard Miner (Taboo Interceptor Matrix)**: Actively mines `stderr` execution failures from chat logs, distills them via local Qwen2.5 (14B), and hard-codes them into a semantic burn list (Taboo Protocols) to physically prevent AI tool hallucinations and repeated syntax errors.
 
 ---
 
