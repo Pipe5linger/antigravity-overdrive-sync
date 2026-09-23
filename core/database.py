@@ -338,6 +338,33 @@ class ULMDatabase:
                     except Exception as e:
                         print(f"[-] Warning creating procedural graph tables: {e}")
 
+                if current_version < 12:
+                    # Phase 7: Graveyard Miner & Taboo Rules
+                    try:
+                        c.execute("""
+                            CREATE TABLE IF NOT EXISTS tool_execution_logs (
+                                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                                chat_id TEXT,
+                                command TEXT,
+                                stderr TEXT,
+                                exit_code INTEGER,
+                                timestamp TEXT
+                            );
+                        """)
+                        c.execute("""
+                            CREATE TABLE IF NOT EXISTS taboo_rules (
+                                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                                failure_intent TEXT UNIQUE,
+                                regex_pattern TEXT,
+                                remediation TEXT,
+                                hit_count INTEGER DEFAULT 1,
+                                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                            );
+                        """)
+                        c.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (12)")
+                    except Exception as e:
+                        print(f"[-] Warning creating v12 schema (Graveyard Miner): {e}")
+
                 # Always ensure profiled_at column exists (safe migration)
                 try:
                     c.execute("ALTER TABLE sessions ADD COLUMN profiled_at TEXT;")
@@ -928,3 +955,38 @@ class ULMDatabase:
         except sqlite3.Error as e:
             print(f"[-] Error listing relations: {e}")
             return []
+    # =========================================================================
+    # Taboo Matrix / Graveyard Miner Interface
+    # =========================================================================
+
+    def insert_tool_log(self, chat_id, command, stderr, exit_code, timestamp):
+        """Inserts a tool execution log into the graveyard."""
+        try:
+            with self.get_connection() as conn:
+                c = conn.cursor()
+                c.execute("""
+                    INSERT INTO tool_execution_logs (chat_id, command, stderr, exit_code, timestamp)
+                    VALUES (?, ?, ?, ?, ?)
+                """, (chat_id, command, stderr, exit_code, timestamp))
+                conn.commit()
+                return c.lastrowid
+        except sqlite3.Error as e:
+            print(f"[-] Error inserting tool log: {e}")
+            return None
+
+    def get_failed_tool_logs(self, limit=50):
+        """Retrieves failed tool executions for distillation."""
+        try:
+            with self.get_connection() as conn:
+                conn.row_factory = sqlite3.Row
+                c = conn.cursor()
+                c.execute("""
+                    SELECT * FROM tool_execution_logs 
+                    WHERE exit_code != 0 OR stderr != "" 
+                    ORDER BY timestamp DESC LIMIT ?
+                """, (limit,))
+                return [dict(row) for row in c.fetchall()]
+        except sqlite3.Error as e:
+            print(f"[-] Error fetching failed tool logs: {e}")
+            return []
+

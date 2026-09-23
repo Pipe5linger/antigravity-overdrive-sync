@@ -171,13 +171,14 @@ class AntigravityParser(BaseParser):
                     if raw_content is None:
                         print(f"[-] Skipping unreadable file (not valid text): {item}")
                         continue
-                    messages, project_tag = adapter.parse(raw_content)
+                    messages, project_tag, failed_tools = adapter.parse(raw_content)
                     
-                    if messages:
+                    if messages or failed_tools:
                         extracted_payloads.append({
                             "chat_id": item,
                             "last_mutated": datetime.fromtimestamp(mtime, tz=timezone.utc).isoformat(),
                             "messages": messages,
+                            "failed_tools": failed_tools,
                             "project_tag": project_tag
                         })
         
@@ -190,6 +191,28 @@ class AntigravityParser(BaseParser):
             print("[*] No new payloads to ingest.")
             return
 
+        # Connect to DB to save graveyard metrics
+        try:
+            from core.engine import ULMEngine
+            from core.database import ULMDatabase
+            engine = ULMEngine()
+            db_path = str(Path(engine.target_yaml).with_suffix(".db"))
+            db = ULMDatabase(db_path)
+            
+            for payload in extracted_payloads:
+                if payload.get("failed_tools"):
+                    for ft in payload["failed_tools"]:
+                        db.insert_tool_log(
+                            chat_id=payload["chat_id"],
+                            command=ft["command"],
+                            stderr=ft["stderr"],
+                            exit_code=ft["exit_code"],
+                            timestamp=ft["timestamp"]
+                        )
+                    print(f"[+] Saved {len(payload['failed_tools'])} tool failures to graveyard for {payload['chat_id']}.")
+        except Exception as e:
+            print(f"[-] Error writing to tool_execution_logs: {e}")
+
         try:
             import chromadb
         except ImportError:
@@ -201,6 +224,8 @@ class AntigravityParser(BaseParser):
         collection = client.get_or_create_collection(name="system_memory")
 
         for payload in extracted_payloads:
+            if not payload.get("messages"):
+                continue
             print(f"[+] Extracting facts for chat_id: {payload['chat_id']}")
             try:
                 documents, embeddings, metadatas = fact_extractor.extract_and_embed_facts(payload["messages"], llm_model)

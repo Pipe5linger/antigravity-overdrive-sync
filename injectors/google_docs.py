@@ -41,6 +41,7 @@ class GoogleDocsInjector(BaseInjector):
         temporal = assembler.calculate_temporal_awareness()
         metrics = assembler.get_sqlite_metrics(limit=15, purge_noise=True)
         env_map = assembler.get_semantic_environment_map()
+        taboos = assembler.get_taboo_protocols()
         
         vault_content = ""
         try:
@@ -89,6 +90,9 @@ class GoogleDocsInjector(BaseInjector):
             payload_sections.append("## 3. PERSONALITY MATRIX & LIVING VOICE\n" + personality)
         if lore:
             payload_sections.append("## 4. OPERATIONAL LORE & CHRONICLE ARCHIVE\n" + lore)
+
+        if taboos:
+            payload_sections.append(taboos)
 
         payload_sections.extend([
             f"## 5. TEMPORAL & ACTIVE WORKSPACE STATE\n{temporal}",

@@ -364,9 +364,12 @@ class DynamicPromptAssembler:
             "  Query local REST endpoint at `http://127.0.0.1:8890/api/recall?q=<query>&limit=5`"
         )
 
+        taboos = self.get_taboo_protocols()
+        
         sections = [
             banner,
             identity,
+            taboos,
             f"## NARRATIVE ORIGIN & BACKSTORY\n{backstory}" if backstory else "",
             f"## PERSONALITY MATRIX & LIVING VOICE\n{personality}" if personality else "",
             f"## OPERATIONAL LORE & CHRONICLE ARCHIVE\n{lore}" if lore else "",
@@ -468,14 +471,12 @@ class DynamicPromptAssembler:
     def get_sqlite_metrics(self, limit: int = 25, max_chars: int = 4000, purge_noise: bool = True) -> str:
         """Fetch top developer‑profile metrics from the SQLite DB within a strict token/character budget."""
         try:
+            query = "SELECT category, name, description, confidence, frequency FROM developer_profile ORDER BY confidence DESC, frequency DESC LIMIT ?"
             if self.db_instance:
                 conn = self.db_instance.get_connection()
                 conn.row_factory = sqlite3.Row
                 c = conn.cursor()
-                c.execute(
-                    "SELECT name, description FROM developer_profile ORDER BY confidence DESC, frequency DESC LIMIT ?",
-                    (limit * 2,)
-                )
+                c.execute(query, (limit * 3,))
                 rows = c.fetchall()
                 conn.close()
             else:
@@ -484,10 +485,7 @@ class DynamicPromptAssembler:
                     conn.execute("PRAGMA journal_mode = WAL;")
                     conn.execute("PRAGMA busy_timeout = 5000;")
                     c = conn.cursor()
-                    c.execute(
-                        "SELECT name, description FROM developer_profile ORDER BY confidence DESC, frequency DESC LIMIT ?",
-                        (limit * 2,)
-                    )
+                    c.execute(query, (limit * 3,))
                     rows = c.fetchall()
             
             if not rows:
@@ -498,27 +496,57 @@ class DynamicPromptAssembler:
                 "grossed up", "estimated market value", "salvator mundi", "third of may", "goya"
             ]
 
-            lines = []
-            cur_chars = 0
-            count = 0
+            strengths = []
+            habits = []
+            prefs = []
+            others = []
+
             for row in rows:
+                cat = (row['category'] or "").lower()
                 name_str = row['name'] or ""
                 desc_str = row['description'] or ""
-                combined_lower = f"{name_str} {desc_str}".lower()
+                try:
+                    conf = float(row['confidence'] or 0.0)
+                except ValueError:
+                    conf = 0.0
+                freq = row['frequency'] or 1
                 
+                combined_lower = f"{name_str} {desc_str}".lower()
                 if purge_noise and any(k in combined_lower for k in noise_keywords):
                     continue
+                
+                if "strength" in cat or "skill" in cat:
+                    strengths.append(f"- **{name_str}** (Confidence: {conf:.2f}): {desc_str}")
+                elif "habit" in cat or "loop" in cat:
+                    habits.append(f"- **{name_str}** (Frequency: {freq}): {desc_str}")
+                elif "preference" in cat or "env" in cat or "config" in cat:
+                    prefs.append(f"- **{name_str}**: {desc_str}")
+                else:
+                    others.append(f"- **{name_str}**: {desc_str}")
 
-                line = f"- {name_str}: {desc_str}"
-                if cur_chars + len(line) > max_chars and lines:
-                    break
-                lines.append(line)
-                cur_chars += len(line)
-                count += 1
-                if count >= limit:
-                    break
+            lines = [
+                "# 👤 DEVELOPER COGNITIVE PROFILE",
+                "*A profile mapping of Bobby's strengths, habits, and tool preferences (Confidence % / Frequency).* \n",
+                "## 🌟 Developer Insights\n"
+            ]
+            
+            if strengths:
+                lines.append("### 🛠️ Technical Strengths")
+                lines.extend(strengths[:10])
+                lines.append("")
+                
+            if habits:
+                lines.append("### 🔄 Workspace Habits")
+                lines.extend(habits[:10])
+                lines.append("")
+                
+            if prefs or others:
+                lines.append("### ⚙️ Environment Preferences")
+                lines.extend(prefs[:10])
+                lines.extend(others[:5])
+                lines.append("")
 
-            return "\n".join(lines) if lines else "No developer metrics available."
+            return "\n".join(lines)
         except Exception as e:
             return f"<!-- Metrics query error: {e} -->"
 
@@ -576,3 +604,30 @@ class DynamicPromptAssembler:
         return f"Temporal awareness – active system time is {now.isoformat()}."
 
     # End of file
+    def get_taboo_protocols(self, limit: int = 5) -> str:
+        """Fetches the active semantic taboo rules to prevent tool execution hallucinations."""
+        try:
+            import sqlite3
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                cursor.execute("SELECT failure_intent, regex_pattern, remediation FROM taboo_rules ORDER BY hit_count DESC, created_at DESC LIMIT ?", (limit,))
+                rows = cursor.fetchall()
+                
+                if not rows:
+                    return ""
+                    
+                lines = ["## TABOO PROTOCOLS (Graveyard Miner)"]
+                lines.append("> [!WARNING] The following syntax and tool commands have failed in the past. Do not repeat them.")
+                for row in rows:
+                    lines.append(f"- **Intent**: {row['failure_intent']}")
+                    if row['regex_pattern']:
+                        lines.append(f"  - Pattern to Avoid: `{row['regex_pattern']}`")
+                    lines.append(f"  - Remediation: {row['remediation']}")
+                newline = chr(10)
+                return newline.join(lines) + newline
+        except sqlite3.OperationalError:
+            return ""
+        except Exception as e:
+            return f"<!-- Taboo load error: {e} -->"
+

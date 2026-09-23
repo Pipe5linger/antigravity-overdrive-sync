@@ -62,7 +62,7 @@ class GeminiNormalizer:
                         "text": text,
                         "timestamp": datetime.now().isoformat()
                     })
-            return normalized, None
+            return normalized, None, []
             
         try:
             data = json.loads(file_content)
@@ -88,7 +88,7 @@ class GeminiNormalizer:
                             "text": text,
                             "timestamp": chunk.get("createTime") or datetime.now().isoformat()
                         })
-                return normalized, None
+                return normalized, None, []
 
             # Handle object with 'messages' list (Gemini Exporter) or raw array
             entries = data.get("messages", []) if isinstance(data, dict) else (data if isinstance(data, list) else [])
@@ -137,13 +137,16 @@ class GeminiNormalizer:
                     })
         except json.JSONDecodeError:
             print("[-] GeminiNormalizer: Failed to parse JSON.")
-        return normalized, None
+        return normalized, None, []
 
 class AntigravityNormalizer:
     def parse(self, file_content):
         """Adapter for your existing .jsonl system generated logs."""
         normalized = []
+        failed_tools = []
         project_tag = None
+        last_tool_call = None
+
         for line in file_content.splitlines():
             if not line.strip():
                 continue
@@ -164,9 +167,16 @@ class AntigravityNormalizer:
                             if cwd_val and isinstance(cwd_val, str):
                                 project_tag = os.path.basename(cwd_val.strip().strip('"\'').rstrip("\\/"))
                 
+                # Keep track of last tool call to correlate with output
+                if "tool_calls" in event:
+                    tcs = event.get("tool_calls", [])
+                    if tcs:
+                        last_tool_call = tcs[0]
+
                 event_type = event.get("type")
+                text = event.get("content", "").strip()
+
                 if event_type in ["USER_INPUT", "PLANNER_RESPONSE", "MODEL_RESPONSE"]:
-                    text = event.get("content", "").strip()
                     # NOISE FILTER: Skip empty or very short system stubs
                     if text and len(text) > 10:
                         normalized.append({
@@ -174,9 +184,36 @@ class AntigravityNormalizer:
                             "text": text,
                             "timestamp": event.get("created_at")
                         })
+                
+                # Extract Tool failures
+                if event_type == "GENERIC" and text and "exited with code" in text:
+                    code_str = text.split("exited with code")[1].split(".")[0].strip()
+                    try:
+                        exit_code = int(code_str)
+                    except ValueError:
+                        exit_code = 0
+                        
+                    if exit_code != 0:
+                        cmd = "Unknown Command"
+                        if last_tool_call:
+                            args = last_tool_call.get("args", {})
+                            if isinstance(args, str):
+                                try:
+                                    args = json.loads(args)
+                                except:
+                                    pass
+                            cmd = args.get("CommandLine", cmd)
+                        
+                        failed_tools.append({
+                            "command": cmd,
+                            "stderr": text,
+                            "exit_code": exit_code,
+                            "timestamp": event.get("created_at")
+                        })
+
             except json.JSONDecodeError:
                 continue
-        return normalized, project_tag
+        return normalized, project_tag, failed_tools
 
 class ClineNormalizer:
     def parse(self, file_content):
@@ -208,4 +245,4 @@ class ClineNormalizer:
                     })
         except Exception as e:
             print(f"[-] ClineNormalizer: Error parsing Cline log: {e}")
-        return normalized, project_tag
+        return normalized, project_tag, []

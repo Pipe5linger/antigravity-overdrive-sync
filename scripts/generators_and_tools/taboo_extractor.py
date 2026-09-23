@@ -15,16 +15,17 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 ULM_DB_PATH = PROJECT_ROOT / "db" / "sync_state.db"
 OLLAMA_URL = "http://127.0.0.1:11434/api/generate"
-OLLAMA_MODEL = "qwen2.5:7b-instruct"
+OLLAMA_MODEL = "qwen2.5-coder:14b"
 
 SYSTEM_PROMPT = (
     "You are an elite, merciless code auditor analyzing agent tool execution failures. "
     "Your job is to look at a failed CLI command and its resulting stderr output, "
     "and distill the underlying 'semantic failure rule'. "
+    "If a provided Procedure from the graph solves this, suggest executing the target_script_path instead. "
     "Output strictly valid JSON with three keys: "
     "'failure_intent' (a 3-5 word category), "
     "'regex_pattern' (a rough generalized pattern matching the bad syntax), and "
-    "'remediation' (how to fix it instantly)."
+    "'remediation' (how to fix it instantly or which procedure script to run)."
 )
 
 def setup_taboo_matrix(cursor):
@@ -40,19 +41,21 @@ def setup_taboo_matrix(cursor):
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     """)
-    # Assuming 'chat_history' or similar exists in ULM. We'll simulate the schema query.
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS tool_execution_logs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            command TEXT,
-            stderr TEXT,
-            exit_code INTEGER
-        )
-    """)
 
-def distill_failure_via_ollama(command: str, stderr: str) -> dict | None:
+def distill_failure_via_ollama(command: str, stderr: str, cursor) -> dict | None:
     """Pipes the failure through local Qwen2.5 to extract the structural taboo rule."""
-    user_prompt = f"Command Attempted: `{command}`\nError Output: `{stderr}`\n\nAnalyze and distill this failure."
+    
+    # Fetch procedural graph nodes to see if there's an existing playbook
+    try:
+        cursor.execute("SELECT action_name, target_script_path FROM procedures LIMIT 20")
+        procedures = cursor.fetchall()
+        graph_context = "\\nAvailable Playbooks in Graph:\\n"
+        for p in procedures:
+            graph_context += f"- Action: {p[0]} -> Script: {p[1]}\\n"
+    except sqlite3.OperationalError:
+        graph_context = "\\n(No playbooks available in graph)\\n"
+        
+    user_prompt = f"Command Attempted: `{command}`\\nError Output: `{stderr}`\\n{graph_context}\\nAnalyze and distill this failure."
     
     payload = json.dumps({
         "model": OLLAMA_MODEL,
@@ -60,7 +63,7 @@ def distill_failure_via_ollama(command: str, stderr: str) -> dict | None:
         "system": SYSTEM_PROMPT,
         "stream": False,
         "format": "json",
-        "keep_alive": 0, # Zero-VRAM residency: immediately evict when done
+        "keep_alive": 0,
         "options": {"temperature": 0.1, "num_predict": 256}
     }).encode("utf-8")
 
@@ -72,7 +75,7 @@ def distill_failure_via_ollama(command: str, stderr: str) -> dict | None:
     )
 
     try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
+        with urllib.request.urlopen(req, timeout=300) as resp:
             body = json.loads(resp.read().decode("utf-8"))
             response_text = body.get("response", "{}")
             return json.loads(response_text)
@@ -95,8 +98,6 @@ def mine_the_graveyard():
 
     setup_taboo_matrix(cursor)
 
-    # Hunt for explicit stderr logs or exit_code > 0 
-    # (Adjust table/column names to match your exact ULM schema)
     try:
         cursor.execute("""
             SELECT command, stderr 
@@ -118,8 +119,8 @@ def mine_the_graveyard():
 
     success_count = 0
     for cmd, err in failed_executions:
-        print(f"\nDistilling: `{cmd[:40]}...`")
-        rule = distill_failure_via_ollama(cmd, err)
+        print(f"\\nDistilling: `{cmd[:40]}...`")
+        rule = distill_failure_via_ollama(cmd, err, cursor)
         
         if rule and "failure_intent" in rule:
             intent = rule["failure_intent"]
@@ -138,9 +139,9 @@ def mine_the_graveyard():
             except Exception as db_err:
                 print(f"   ❌ DB Insert Error: {db_err}")
                 
-        time.sleep(0.5) # Slight breather for the local GPU
+        time.sleep(0.5)
 
-    print(f"\n🏆 Mining Complete. Seeded {success_count} semantic taboo rules into the ULM core.")
+    print(f"\\n🏆 Mining Complete. Seeded {success_count} semantic taboo rules into the ULM core.")
     conn.close()
 
 if __name__ == "__main__":
