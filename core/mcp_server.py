@@ -44,8 +44,8 @@ def get_db() -> ULMDatabase:
 
 @mcp.tool()
 def ulm_recall(query: str, limit: int = 5, project_tag: str = "") -> str:
-    """Performs deep hybrid full-text (FTS5) and semantic memory recall across historical facts, 
-    sessions, and developer profile metrics stored in the local SQLite database.
+    """Performs deep dual-layer hybrid memory recall across historical facts, developer profile metrics,
+    and conversational dialogue using both semantic vector embeddings (cosine similarity) and FTS5 BM25 search.
 
     Args:
         query: The semantic search query or topic to recall (e.g. 'learning rate', 'comfyui vram', 'database schema').
@@ -54,13 +54,34 @@ def ulm_recall(query: str, limit: int = 5, project_tag: str = "") -> str:
     """
     db = get_db()
     results = []
+    seen_facts = set()
 
+    # Layer 1: Semantic Vector Recall (Cosine Similarity via Local Ollama / MemoryConsolidator)
+    try:
+        from core.consolidator import MemoryConsolidator
+        mc = MemoryConsolidator(db)
+        query_vector = mc._get_embedding(query)
+        if query_vector:
+            # Query semantic recall with a permissive threshold for hybrid retrieval
+            semantic_matches = db.semantic_recall(query_vector=query_vector, limit=limit, min_similarity=0.35)
+            for m in semantic_matches:
+                if project_tag and m.get("project_tag") and m.get("project_tag") != project_tag:
+                    continue
+                tag = f" [{m['project_tag']}]" if m.get("project_tag") else ""
+                sim_pct = int(m.get("similarity", 0) * 100)
+                results.append(f"- **Semantic Fact**{tag} ({m['category']}, {sim_pct}% match): {m['fact']}")
+                seen_facts.add(m['fact'].strip().lower())
+    except Exception as e:
+        # Graceful degradation to FTS5 if Ollama vector embedding is unavailable
+        pass
+
+    # Layer 2: Full-Text Search (FTS5 BM25 Ranked) & Developer Profile Telemetry
     try:
         with db.get_connection() as conn:
             conn.row_factory = sqlite3.Row
             c = conn.cursor()
 
-            # 1. Search Facts Table via FTS5 if available or standard LIKE
+            # 2a. Search Facts Table via FTS5 if available or standard LIKE
             try:
                 if project_tag:
                     c.execute("""
@@ -78,7 +99,6 @@ def ulm_recall(query: str, limit: int = 5, project_tag: str = "") -> str:
                     """, (query, limit))
                 rows = c.fetchall()
             except sqlite3.OperationalError:
-                # Fallback to standard LIKE if FTS query syntax is malformed
                 like_query = f"%{query}%"
                 if project_tag:
                     c.execute("""
@@ -97,10 +117,13 @@ def ulm_recall(query: str, limit: int = 5, project_tag: str = "") -> str:
                 rows = c.fetchall()
 
             for r in rows:
-                tag = f" [{r['project_tag']}]" if r['project_tag'] else ""
-                results.append(f"- **Fact**{tag} ({r['category']}, {int(r['confidence'] * 100)}% conf): {r['fact']}")
+                clean_fact = r['fact'].strip().lower()
+                if clean_fact not in seen_facts:
+                    tag = f" [{r['project_tag']}]" if r['project_tag'] else ""
+                    results.append(f"- **Keyword Fact**{tag} ({r['category']}, {int(r['confidence'] * 100)}% conf): {r['fact']}")
+                    seen_facts.add(clean_fact)
 
-            # 2. Search Developer Profile Traits
+            # 2b. Search Developer Profile Traits
             like_query = f"%{query}%"
             c.execute("""
                 SELECT category, name, description, confidence, frequency 
@@ -111,7 +134,7 @@ def ulm_recall(query: str, limit: int = 5, project_tag: str = "") -> str:
             for r in c.fetchall():
                 results.append(f"- **Developer Profile** [{r['category']} - {r['name']}]: {r['description']}")
 
-            # 3. Search Historical Chat Messages via FTS5
+            # 2c. Search Historical Chat Messages via FTS5
             try:
                 c.execute("""
                     SELECT m.session_id, m.role, m.content, m.created_at, s.project_tag 
@@ -134,7 +157,7 @@ def ulm_recall(query: str, limit: int = 5, project_tag: str = "") -> str:
     if not results:
         return f"No memories found matching query '{query}' in ULM database."
 
-    return "### 🧠 ULM Memory Recall Results:\n" + "\n".join(results)
+    return "### 🧠 ULM Memory Recall (Hybrid Results):\n" + "\n".join(results[:limit * 2])
 
 @mcp.tool()
 def ulm_pin_fact(fact: str, category: str = "Technical", project_tag: str = "") -> str:
@@ -164,7 +187,19 @@ def ulm_pin_fact(fact: str, category: str = "Technical", project_tag: str = "") 
                     pinned = 1,
                     last_seen = excluded.last_seen
             """, (fact_id, fact, category, now_str, now_str, tag, now_str))
-            conn.commit()
+        # Compute and cache embedding immediately for instant semantic recall
+        try:
+            from core.consolidator import MemoryConsolidator
+            import numpy as np
+            mc = MemoryConsolidator(db)
+            emb = mc._get_embedding(fact)
+            if emb:
+                blob = np.array(emb, dtype=np.float32).tobytes()
+                with db.get_connection() as conn:
+                    conn.execute("INSERT OR REPLACE INTO fact_embeddings (fact_id, embedding, model_id, created_at) VALUES (?, ?, ?, ?)", (fact_id, blob, "all-minilm", now_str))
+                    conn.commit()
+        except Exception:
+            pass
 
         tag_str = f" for [{project_tag}]" if project_tag else ""
         return f"[+] Successfully pinned golden fact{tag_str} into ULM memory: \"{fact}\""

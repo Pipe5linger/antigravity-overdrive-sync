@@ -42,9 +42,13 @@ The user selected **Options 2, 3, and 5** for execution:
   - Sovereign rule protection preventing duplicate `GEMINI.md` creation in subfolders.
 - Verified all FastMCP tools pass via `scripts/generators_and_tools/test_mcp_tools.py`.
 
-### [NEXT UP] Objective B: Option 2 — Dual-Layer Hybrid Retrieval in FastMCP (`core/mcp_server.py`)
-- **Goal**: Upgrade `ulm_recall` in `core/mcp_server.py` from pure FTS5 keyword matching to hybrid retrieval combining FTS5 and semantic cosine similarity (using local Ollama or SentenceTransformer vector embeddings).
-- **Files**: `core/mcp_server.py`, `recall.py`, `core/consolidator.py`.
+### [COMPLETED] Objective B: Option 2 — Dual-Layer Hybrid Retrieval in FastMCP (`core/mcp_server.py`)
+- **Status**: **DONE**.
+- Refactored `ulm_recall` in `core/mcp_server.py` to combine:
+  - **Layer 1**: Semantic vector cosine similarity against cached embeddings using `all-minilm` via `MemoryConsolidator`.
+  - **Layer 2**: Full-text FTS5 BM25 search across facts, developer profile metrics, and chat history.
+- Enhanced `ulm_pin_fact` to automatically compute and store vector embeddings on the fly for any newly pinned fact.
+- Verified all FastMCP tools pass via `scripts/generators_and_tools/test_mcp_tools.py`.
 
 ### [NEXT UP] Objective C: Option 3 — Active Session Auto-Consolidation (Ephemeral -> Semantic Memory)
 - **Goal**: Background ingestion of session transcripts (`.system_generated/logs/transcript.jsonl`) to auto-distill key technical decisions and developer traits into `developer_profile` and `facts`.
