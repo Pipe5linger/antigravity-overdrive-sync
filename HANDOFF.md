@@ -67,12 +67,15 @@ The user selected **Options 2, 3, and 5** for execution:
 - Wired `distill_graveyard()` from `scripts/generators_and_tools/taboo_extractor.py` directly into `core/daemon.py:_run_maintenance()`.
 - Automatically analyzes failed CLI commands from `tool_execution_logs` and extracts regex patterns + remediations into `taboo_rules` with zero human intervention.
 
-### [COMPLETED] Bonus Optimization: Option C — ComfyUI & GPU VRAM Guard MCP Tools
+### [COMPLETED] Bonus Optimization: Option C — ComfyUI, GPU VRAM & Native Database MCP Tools
 - **Status**: **DONE**.
-- Added 2 new native FastMCP tools to `core/mcp_server.py`:
+- Added 4 new native FastMCP tools to `core/mcp_server.py`:
   1. `ulm_comfy_status()`: Real-time inspection of active prompts, queued tasks, and generation pipelines on `http://127.0.0.1:8188`.
   2. `ulm_vram_guard(action='check'|'purge')`: Real-time inspection of RTX 4070 12GB VRAM allocation, temperature, and utilization via `nvidia-smi`, plus instant PyTorch CUDA cache purging.
-- Total active FastMCP tools in `core/mcp_server.py`: **7 verified tools**. All tests pass in `scripts/generators_and_tools/test_mcp_tools.py`.
+  3. `ulm_inspect_db(table, limit, schema)`: Direct zero-script inspection of SQLite table counts, schema columns, and sample rows.
+  4. `ulm_vacuum_db()`: Direct zero-script execution of WAL checkpoints, orphan embedding prunes, and database defragmentation.
+- Created `scripts/playbooks/` library (`inspect_db.py`, `port_audit.py`, `gpu_guard.py`, `comfy_queue.py`, `ingest_sessions.py`, `vacuum_state.py`) registered in the `procedures` table for CLI fallback.
+- Total active FastMCP tools in `core/mcp_server.py`: **9 verified tools**. All 9 pass in `scripts/generators_and_tools/test_mcp_tools.py`.
 
 ---
 

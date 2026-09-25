@@ -413,6 +413,85 @@ def ulm_vram_guard(action: str = "check") -> str:
 
     return "\n".join(result_lines)
 
+@mcp.tool()
+def ulm_inspect_db(table: str = "", limit: int = 5, schema: bool = False) -> str:
+    """Natively inspects SQLite table statistics, row counts, schema columns, or sample data 
+    from sync_state.db without writing or executing ad-hoc Python scripts.
+
+    Args:
+        table: Optional table name to inspect. If empty, returns row counts for all tables.
+        limit: Number of sample rows to retrieve (default 5).
+        schema: If true, returns column names and SQLite data types for the specified table.
+    """
+    db = get_db()
+    try:
+        with db.get_connection() as conn:
+            c = conn.cursor()
+            if not table:
+                c.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+                tables = [r[0] for r in c.fetchall() if not r[0].startswith("sqlite_")]
+                lines = ["### 📊 ULM Database Tables:"]
+                for t in tables:
+                    try:
+                        c.execute(f"SELECT COUNT(*) FROM \"{t}\"")
+                        count = c.fetchone()[0]
+                        lines.append(f"- **{t}**: {count:,} rows")
+                    except Exception as e:
+                        lines.append(f"- **{t}**: error ({e})")
+                return "\n".join(lines)
+
+            # Specific table
+            lines = [f"### 📋 Table: `{table}`"]
+            if schema:
+                c.execute(f"PRAGMA table_info(\"{table}\")")
+                lines.append("\n**Columns:**")
+                for col in c.fetchall():
+                    pk = " *(PK)*" if col[5] else ""
+                    lines.append(f"- `{col[1]}` ({col[2]}){pk}")
+
+            c.execute(f"SELECT * FROM \"{table}\" LIMIT ?", (limit,))
+            rows = c.fetchall()
+            c.execute(f"PRAGMA table_info(\"{table}\")")
+            col_names = [col[1] for col in c.fetchall()]
+
+            if not rows:
+                lines.append("\n*(Table is currently empty)*")
+            else:
+                lines.append(f"\n**Sample Data (Top {len(rows)}):**")
+                for i, r in enumerate(rows, 1):
+                    lines.append(f"\n*Row {i}:*")
+                    for name, val in zip(col_names, r):
+                        val_str = str(val)
+                        if len(val_str) > 120:
+                            val_str = val_str[:117] + "..."
+                        lines.append(f"  - `{name}`: {val_str}")
+
+            return "\n".join(lines)
+    except Exception as e:
+        return f"[-] Error inspecting database: {e}"
+
+@mcp.tool()
+def ulm_vacuum_db() -> str:
+    """Natively executes an SQLite WAL checkpoint, prunes unlinked orphan embeddings, 
+    and vacuums the database to reclaim disk space and maximize query speeds.
+    """
+    try:
+        from scripts.generators_and_tools.vacuum_database import vacuum_database
+        from pathlib import Path
+        db_path = Path(DEFAULT_DB_PATH)
+        orig_size = db_path.stat().st_size
+        vacuum_database()
+        new_size = db_path.stat().st_size
+        freed = (orig_size - new_size) / (1024 * 1024)
+        return (
+            f"✅ **ULM Vacuum Complete**:\n"
+            f"- Prior Size: {orig_size / (1024*1024):.2f} MB\n"
+            f"- Current Size: {new_size / (1024*1024):.2f} MB\n"
+            f"- Disk Space Reclaimed: {freed:.2f} MB"
+        )
+    except Exception as e:
+        return f"[-] Vacuum error: {e}"
+
 if __name__ == "__main__":
     # Launch stdio transport for native Antigravity MCP integration
     mcp.run(transport="stdio")

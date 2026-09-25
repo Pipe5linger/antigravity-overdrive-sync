@@ -10,7 +10,11 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from core.mcp_server import ulm_recall, ulm_pin_fact, ulm_get_playbook, ulm_check_taboo, ulm_hardware_status, ulm_comfy_status, ulm_vram_guard
+from core.mcp_server import (
+    ulm_recall, ulm_pin_fact, ulm_get_playbook, ulm_check_taboo, 
+    ulm_hardware_status, ulm_comfy_status, ulm_vram_guard,
+    ulm_inspect_db, ulm_vacuum_db
+)
 
 def test_all_tools():
     print("[1] Testing ulm_hardware_status...")
@@ -48,7 +52,17 @@ def test_all_tools():
     assert "VRAM" in vram
     print("  -> Passed")
 
-    print("\n[SUCCESS] All 7 ULM MCP tools verified functional!")
+    print("[8] Testing ulm_inspect_db...")
+    db_stat = ulm_inspect_db()
+    assert "Database Tables" in db_stat
+    print("  -> Passed")
+
+    print("[9] Testing ulm_vacuum_db...")
+    vac = ulm_vacuum_db()
+    assert "Vacuum Complete" in vac
+    print("  -> Passed")
+
+    print("\n[SUCCESS] All 9 ULM MCP tools verified functional!")
 
 if __name__ == "__main__":
     test_all_tools()
