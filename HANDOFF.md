@@ -84,8 +84,9 @@ The user selected **Options 2, 3, and 5** for execution:
 | Component | Path | Description |
 |---|---|---|
 | **SQLite State DB** | `db/sync_state.db` | WAL mode, Schema v12. Contains `taboo_rules`, `facts`, `sessions`, `developer_profile`, `persona_schemas`. |
-| **MCP Server** | `core/mcp_server.py` | FastMCP server running over stdio. Exposes ULM tools to Antigravity / Gemini. |
-| **MCP Config** | `C:\Users\boben\.gemini\config\mcp_config.json` | Registers `ulm-memory` pointing to `core/mcp_server.py`. |
+| **ULM MCP Server** | `core/mcp_server.py` | FastMCP server running over stdio. Exposes 9 ULM memory, taboo, DB & telemetry tools. |
+| **ComfyUI MCP Server** | `core/comfy_mcp_server.py` | FastMCP server running over stdio. Exposes 7 ComfyUI workflow, queue, model & VRAM tools. |
+| **MCP Config** | `C:\Users\boben\.gemini\config\mcp_config.json` | Registers both `ulm-memory` and `comfyui` servers. |
 | **Master Protocol File** | `C:\Users\boben\.gemini\GEMINI.md` | Single sovereign global rule file discovered by Antigravity (~5 KB). |
 | **Prompt Assembler** | `core/assembler.py` | Builds persona headers, metrics, facts, and taboo summaries. |
 | **Persona Baseline** | `persona_baseline.yaml` | Core persona config, backstory, voice, operational attitudes, and directives. |
