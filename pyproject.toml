@@ -8,7 +8,7 @@ version = "1.0.0"
 description = "Universal Local Memory (ULM) Engine - A local-first, vector-aware cognitive ledger and memory sync pipeline for AI co-pilots."
 readme = "README.md"
 authors = [
-    { name = "Bobby & Vespera", email = "bobby@vespera.local" }
+    { name = "ULM Engine Contributors" }
 ]
 license = { text = "MIT" }
 keywords = ["ai", "local-llm", "memory", "ollama", "cline", "copilot", "antigravity", "vector-db", "sqlite"]

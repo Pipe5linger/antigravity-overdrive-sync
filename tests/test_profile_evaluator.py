@@ -85,14 +85,15 @@ class TestProfileEvaluator(unittest.TestCase):
             self.assertTrue(success)
             mock_upsert.assert_called_once_with("strength", "sqlite-wal-understanding", "Demonstrated understanding of SQLite WAL concurrency advantages.", 0.95, project_tag=None)
 
-    @patch("urllib.request.urlopen")
-    def test_evaluate_session_cloud_gemini(self, mock_urlopen):
+    @patch("core.profile_evaluator.httpx.AsyncClient.post")
+    def test_evaluate_session_cloud_gemini(self, mock_post):
         import asyncio
         self.db.set_preference("llm_provider", "cloud_gemini")
         self.db.set_preference("gemini_api_key", "MOCK_KEY_123")
 
         mock_response = MagicMock()
-        mock_response.read.return_value = json.dumps({
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
             "candidates": [
                 {
                     "content": {
@@ -113,8 +114,8 @@ class TestProfileEvaluator(unittest.TestCase):
                     }
                 }
             ]
-        }).encode("utf-8")
-        mock_urlopen.return_value.__enter__.return_value = mock_response
+        }
+        mock_post.return_value = mock_response
 
         with patch.object(self.db, "upsert_profile_metric") as mock_upsert:
             loop = asyncio.new_event_loop()
