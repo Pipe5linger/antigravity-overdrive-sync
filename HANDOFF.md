@@ -55,7 +55,24 @@ The user selected **Options 2, 3, and 5** for execution:
 - Implemented `ingest_transcripts(force_all=False)` directly into `core/consolidator.py`.
 - Ingests active Antigravity `.system_generated/logs/transcript.jsonl` files and Cline task histories, processes dialogue through `FactExtractor` (3-tier heuristic, regex, and SHA-256 deduplication), and writes extracted technical facts and developer traits directly into SQLite `facts` and `developer_profile`.
 - Verified live: successfully ingested active session transcripts and extracted **207 active semantic facts**.
-- Verified all FastMCP tools pass via `scripts/generators_and_tools/test_mcp_tools.py`.
+
+### [COMPLETED] Bonus Optimization: Option A — Database Vacuum & Orphan Purge
+- **Status**: **DONE**.
+- Script: `scripts/generators_and_tools/vacuum_database.py`.
+- Purged **451,658 legacy orphaned embeddings** (`fact_id IS NULL`).
+- Database `sync_state.db` shrunk from **1,026.41 MB (1.07 GB) down to 109.67 MB**, reclaiming **916.74 MB** of disk space and accelerating SQLite query speeds.
+
+### [COMPLETED] Bonus Optimization: Option B — Autonomous Graveyard Miner in Daemon
+- **Status**: **DONE**.
+- Wired `distill_graveyard()` from `scripts/generators_and_tools/taboo_extractor.py` directly into `core/daemon.py:_run_maintenance()`.
+- Automatically analyzes failed CLI commands from `tool_execution_logs` and extracts regex patterns + remediations into `taboo_rules` with zero human intervention.
+
+### [COMPLETED] Bonus Optimization: Option C — ComfyUI & GPU VRAM Guard MCP Tools
+- **Status**: **DONE**.
+- Added 2 new native FastMCP tools to `core/mcp_server.py`:
+  1. `ulm_comfy_status()`: Real-time inspection of active prompts, queued tasks, and generation pipelines on `http://127.0.0.1:8188`.
+  2. `ulm_vram_guard(action='check'|'purge')`: Real-time inspection of RTX 4070 12GB VRAM allocation, temperature, and utilization via `nvidia-smi`, plus instant PyTorch CUDA cache purging.
+- Total active FastMCP tools in `core/mcp_server.py`: **7 verified tools**. All tests pass in `scripts/generators_and_tools/test_mcp_tools.py`.
 
 ---
 

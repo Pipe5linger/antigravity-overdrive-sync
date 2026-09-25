@@ -79,6 +79,12 @@ class ULMDaemon:
             print(f"[-] Daemon: Fact consolidation failed: {e}")
         
         try:
+            from scripts.generators_and_tools.taboo_extractor import distill_graveyard
+            distill_graveyard()
+        except Exception as e:
+            print(f"[-] Daemon: Taboo graveyard distillation failed: {e}")
+
+        try:
             injector = ClineRulesInjector()
             if injector.inject(db=self.db):
                 print("[+] Daemon: Successfully refreshed Cline rule files.")

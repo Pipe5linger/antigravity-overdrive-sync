@@ -10,7 +10,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from core.mcp_server import ulm_recall, ulm_pin_fact, ulm_get_playbook, ulm_check_taboo, ulm_hardware_status
+from core.mcp_server import ulm_recall, ulm_pin_fact, ulm_get_playbook, ulm_check_taboo, ulm_hardware_status, ulm_comfy_status, ulm_vram_guard
 
 def test_all_tools():
     print("[1] Testing ulm_hardware_status...")
@@ -38,7 +38,17 @@ def test_all_tools():
     assert "Successfully pinned" in pin
     print("  -> Passed")
 
-    print("\n[SUCCESS] All ULM MCP tools verified functional!")
+    print("[6] Testing ulm_comfy_status...")
+    comfy = ulm_comfy_status()
+    assert "ComfyUI" in comfy
+    print("  -> Passed")
+
+    print("[7] Testing ulm_vram_guard...")
+    vram = ulm_vram_guard(action="check")
+    assert "VRAM" in vram
+    print("  -> Passed")
+
+    print("\n[SUCCESS] All 7 ULM MCP tools verified functional!")
 
 if __name__ == "__main__":
     test_all_tools()

@@ -322,6 +322,97 @@ def ulm_hardware_status() -> str:
 
     return "### 🖥️ Workstation Hardware & Service Telemetry:\n" + "\n".join(status_lines) + f"\n\n{arbitration}"
 
+@mcp.tool()
+def ulm_comfy_status() -> str:
+    """Inspects the active ComfyUI generation queue, currently running prompt, 
+    and system node progress directly from http://127.0.0.1:8188.
+    """
+    import urllib.request
+    import urllib.error
+
+    url = "http://127.0.0.1:8188/queue"
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "Antigravity-ULM"})
+        with urllib.request.urlopen(req, timeout=1.5) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+
+        running = data.get("queue_running", [])
+        pending = data.get("queue_pending", [])
+
+        lines = [
+            "### 🎨 ComfyUI Generation Pipeline Status (Port 8188):",
+            f"- **Active Prompts Running**: {len(running)}",
+            f"- **Queued Tasks Pending**: {len(pending)}"
+        ]
+        if running:
+            for item in running[:3]:
+                prompt_id = item[1] if len(item) > 1 else "Unknown"
+                lines.append(f"  - ⏳ In Progress: Prompt ID `{prompt_id}`")
+        if pending:
+            for item in pending[:3]:
+                prompt_id = item[1] if len(item) > 1 else "Unknown"
+                lines.append(f"  - 🕒 Queued: Prompt ID `{prompt_id}`")
+
+        return "\n".join(lines)
+    except urllib.error.URLError:
+        return "⚪ ComfyUI is currently OFFLINE or unreachable on http://127.0.0.1:8188."
+    except Exception as e:
+        return f"[-] Error querying ComfyUI status: {e}"
+
+@mcp.tool()
+def ulm_vram_guard(action: str = "check") -> str:
+    """Monitors NVIDIA RTX 4070 (12GB) VRAM allocation in real-time and optionally 
+    purges PyTorch GPU cache to clear memory spikes before or after diffusion bakes.
+
+    Args:
+        action: 'check' to inspect current VRAM telemetry, or 'purge' to force PyTorch cache release.
+    """
+    import subprocess
+    import shutil
+
+    result_lines = ["### ⚡ NVIDIA GPU & VRAM Guard:"]
+
+    # 1. Inspect nvidia-smi if available
+    smi_bin = shutil.which("nvidia-smi")
+    if smi_bin:
+        try:
+            out = subprocess.check_output(
+                [smi_bin, "--query-gpu=memory.total,memory.used,memory.free,temperature.gpu,utilization.gpu", "--format=csv,noheader,nounits"],
+                encoding="utf-8",
+                errors="replace",
+                timeout=3
+            ).strip()
+            total, used, free, temp, util = [x.strip() for x in out.split(",")]
+            result_lines.extend([
+                f"- **VRAM Total**: {int(total):,} MB",
+                f"- **VRAM Allocated**: {int(used):,} MB ({int(int(used)/int(total)*100)}%)",
+                f"- **VRAM Available**: {int(free):,} MB",
+                f"- **GPU Core Temp**: {temp} °C | **Compute Utilization**: {util}%"
+            ])
+        except Exception as e:
+            result_lines.append(f"- Telemetry query error: {e}")
+    else:
+        result_lines.append("- `nvidia-smi` binary not detected in PATH.")
+
+    # 2. Handle Purge Action
+    if action.lower() == "purge":
+        try:
+            import gc
+            gc.collect()
+            import torch
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                torch.cuda.ipc_collect()
+                result_lines.append("\n✅ **VRAM Purge Executed**: PyTorch GPU cache and IPC memory successfully released.")
+            else:
+                result_lines.append("\n⚠️ PyTorch CUDA is not currently initialized in this process.")
+        except ImportError:
+            result_lines.append("\nℹ️ PyTorch not installed in this environment; memory cleanup relied on GC.")
+        except Exception as e:
+            result_lines.append(f"\n[-] VRAM Purge error: {e}")
+
+    return "\n".join(result_lines)
+
 if __name__ == "__main__":
     # Launch stdio transport for native Antigravity MCP integration
     mcp.run(transport="stdio")
