@@ -27,7 +27,7 @@ from injectors.gemini_md import GeminiMdInjector
 TARGET_FILES = {
     "Ollama Modelfile": PROJECT_ROOT / "Modelfile.local",
     "Cline Rules": PROJECT_ROOT / ".clinerules",
-    "Gemini Directive": PROJECT_ROOT / "GEMINI.md",
+    "Gemini Directive": Path.home() / ".gemini" / "GEMINI.md",
 }
 
 # Unique directive payload for this test run

@@ -28,7 +28,7 @@ except ImportError as e:
 TARGETS = {
     "Ollama Modelfile": PROJECT_ROOT / "Modelfile.local",
     "Cline Rules": PROJECT_ROOT / ".clinerules",
-    "Gemini Directive": PROJECT_ROOT / "GEMINI.md",
+    "Gemini Directive": Path.home() / ".gemini" / "GEMINI.md",
 }
 
 def run_unified_sync():

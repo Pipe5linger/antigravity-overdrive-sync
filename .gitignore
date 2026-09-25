@@ -46,3 +46,6 @@ D:/Memory/
 
 # Token usage log
 token_usage_log.csv
+
+# Local workspace rule clones (master protocol is sovereign at ~/.gemini/GEMINI.md)
+GEMINI.md
