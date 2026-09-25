@@ -41,12 +41,17 @@ class DynamicPromptAssembler:
 
     def load_baseline(self) -> Dict[str, Any]:
         """Loads and parses the baseline YAML configuration with basic schema validation."""
-        if not self.baseline_path.exists():
-            print(f"[-] Warning: Baseline file not found at {self.baseline_path}")
-            return {}
+        target_path = self.baseline_path
+        if not target_path.exists():
+            example_path = self.workspace_root / "persona_baseline.example.yaml"
+            if example_path.exists():
+                target_path = example_path
+            else:
+                print(f"[-] Warning: Baseline file not found at {self.baseline_path}")
+                return {}
 
         try:
-            with open(self.baseline_path, "r", encoding="utf-8") as f:
+            with open(target_path, "r", encoding="utf-8") as f:
                 data = yaml.safe_load(f) or {}
                 
                 # Basic Schema Validation

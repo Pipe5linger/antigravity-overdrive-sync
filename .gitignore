@@ -49,3 +49,8 @@ token_usage_log.csv
 
 # Local workspace rule clones (master protocol is sovereign at ~/.gemini/GEMINI.md)
 GEMINI.md
+
+# Private Persona, Lore & Custom Handoff Briefs
+persona_baseline.yaml
+HANDOFF*.md
+*.local.md
