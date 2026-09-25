@@ -214,7 +214,7 @@ class DynamicPromptAssembler:
             "  - Auth Token: `HF_TOKEN` (replaces deprecated `HUGGING_FACE_HUB_TOKEN`)"
         )
 
-    def build_identity_header(self, purge_mirrors: bool = False) -> str:
+    def build_identity_header(self, purge_mirrors: bool = True) -> str:
         """Constructs a fully populated Identity block merging YAML, Modelfile, Physical baseline, and Cognitive Mirror Schemas."""
         data = self.load_baseline()
         identity = data.get("identity", {}) if isinstance(data.get("identity"), dict) else {}
@@ -255,19 +255,16 @@ class DynamicPromptAssembler:
             for k, v in hotcoded.items():
                 final_directives.append(f"[{k}] {v}")
 
-        # Cognitive Mirror: Inject current beliefs as high-priority directives (if not purged)
+        # Cognitive Mirror: Inject top active beliefs if explicitly requested (capped to prevent prompt bloat)
         if not purge_mirrors:
             try:
                 if self.db_instance:
                     conn = self.db_instance.get_connection()
                     conn.row_factory = sqlite3.Row
                     c = conn.cursor()
-                    c.execute("SELECT belief_category, current_belief FROM persona_schemas ORDER BY confidence DESC")
+                    c.execute("SELECT belief_category, current_belief FROM persona_schemas WHERE confidence > 0.85 ORDER BY confidence DESC LIMIT 3")
                     for row in c.fetchall():
                         final_directives.insert(0, f"[Mirror: {row['belief_category']}] {row['current_belief']}")
-                    c.execute("SELECT name, description FROM developer_profile WHERE confidence > 0.8 LIMIT 5")
-                    for row in c.fetchall():
-                        final_directives.append(f"[Trait: {row['name']}] {row['description']}")
                     conn.close()
                 else:
                     with sqlite3.connect(self.db_path) as conn:
@@ -275,21 +272,12 @@ class DynamicPromptAssembler:
                         conn.execute("PRAGMA journal_mode = WAL;")
                         conn.execute("PRAGMA busy_timeout = 5000;")
                         c = conn.cursor()
-                        c.execute("SELECT belief_category, current_belief FROM persona_schemas ORDER BY confidence DESC")
+                        c.execute("SELECT belief_category, current_belief FROM persona_schemas WHERE confidence > 0.85 ORDER BY confidence DESC LIMIT 3")
                         for row in c.fetchall():
                             final_directives.insert(0, f"[Mirror: {row['belief_category']}] {row['current_belief']}")
-                        c.execute("SELECT name, description FROM developer_profile WHERE confidence > 0.8 LIMIT 5")
-                        for row in c.fetchall():
-                            final_directives.append(f"[Trait: {row['name']}] {row['description']}")
             except Exception as e:
                 print(f"[-] Cognitive Mirror mapping failed: {e}")
 
-        # Filter out noise, mirrors (if purged), and irrelevant facts
-        noise_keywords = [
-            "va funding fee", "veterans", "saturn devouring his son", "disability rating",
-            "grossed up", "previously considered a sacred", "deviates from the previous belief",
-            "challenges the previous belief"
-        ]
         filtered_directives = []
         for d in final_directives:
             if isinstance(d, dict):
@@ -299,8 +287,6 @@ class DynamicPromptAssembler:
 
             d_lower = d_str.lower()
             if purge_mirrors and ("[mirror:" in d_lower or d_str.startswith("[Mirror")):
-                continue
-            if any(k in d_lower for k in noise_keywords):
                 continue
             filtered_directives.append(d_str)
 
@@ -490,11 +476,6 @@ class DynamicPromptAssembler:
             
             if not rows:
                 return "No developer metrics available."
-            
-            noise_keywords = [
-                "va funding fee", "veterans", "saturn devouring his son", "disability rating",
-                "grossed up", "estimated market value", "salvator mundi", "third of may", "goya"
-            ]
 
             strengths = []
             habits = []
@@ -510,11 +491,7 @@ class DynamicPromptAssembler:
                 except ValueError:
                     conf = 0.0
                 freq = row['frequency'] or 1
-                
-                combined_lower = f"{name_str} {desc_str}".lower()
-                if purge_noise and any(k in combined_lower for k in noise_keywords):
-                    continue
-                
+
                 if "strength" in cat or "skill" in cat:
                     strengths.append(f"- **{name_str}** (Confidence: {conf:.2f}): {desc_str}")
                 elif "habit" in cat or "loop" in cat:

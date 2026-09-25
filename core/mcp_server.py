@@ -1,0 +1,292 @@
+#!/usr/bin/env python3
+"""
+Antigravity Overdrive :: ULM MCP Server
+Model Context Protocol (MCP) Server for Universal Local Memory (ULM).
+Provides first-class on-demand tools for:
+  - Deep semantic & full-text memory recall (ulm_recall)
+  - Real-time golden fact pinning (ulm_pin_fact)
+  - Procedural graph playbook discovery (ulm_get_playbook)
+  - Pre-flight taboo rule syntax validation (ulm_check_taboo)
+  - Workload-aware hardware/port status checks (ulm_hardware_status)
+"""
+
+import os
+import sys
+import json
+import socket
+import sqlite3
+import datetime
+from pathlib import Path
+from mcp.server.fastmcp import FastMCP
+
+# Enforce UTF-8 terminal piping on Windows
+if sys.platform.startswith("win"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", line_buffering=True)
+        sys.stderr.reconfigure(encoding="utf-8", line_buffering=True)
+    except AttributeError:
+        pass
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
+
+from core.database import ULMDatabase, DEFAULT_DB_PATH
+
+# Initialize FastMCP Server
+mcp = FastMCP(
+    name="ulm-memory",
+    instructions="Universal Local Memory (ULM) Cognitive Core & Hardware Telemetry Server"
+)
+
+def get_db() -> ULMDatabase:
+    """Returns a connected ULMDatabase instance."""
+    return ULMDatabase(DEFAULT_DB_PATH)
+
+@mcp.tool()
+def ulm_recall(query: str, limit: int = 5, project_tag: str = "") -> str:
+    """Performs deep hybrid full-text (FTS5) and semantic memory recall across historical facts, 
+    sessions, and developer profile metrics stored in the local SQLite database.
+
+    Args:
+        query: The semantic search query or topic to recall (e.g. 'learning rate', 'comfyui vram', 'database schema').
+        limit: Maximum number of memories to return (default 5).
+        project_tag: Optional project tag filter (e.g. 'antigravity-overdrive-sync', 'ComfyUI', 'AI').
+    """
+    db = get_db()
+    results = []
+
+    try:
+        with db.get_connection() as conn:
+            conn.row_factory = sqlite3.Row
+            c = conn.cursor()
+
+            # 1. Search Facts Table via FTS5 if available or standard LIKE
+            try:
+                if project_tag:
+                    c.execute("""
+                        SELECT fact, category, confidence, project_tag, last_seen 
+                        FROM facts 
+                        WHERE facts MATCH ? AND project_tag = ?
+                        ORDER BY confidence DESC, last_seen DESC LIMIT ?
+                    """, (query, project_tag, limit))
+                else:
+                    c.execute("""
+                        SELECT fact, category, confidence, project_tag, last_seen 
+                        FROM facts 
+                        WHERE facts MATCH ? 
+                        ORDER BY confidence DESC, last_seen DESC LIMIT ?
+                    """, (query, limit))
+                rows = c.fetchall()
+            except sqlite3.OperationalError:
+                # Fallback to standard LIKE if FTS query syntax is malformed
+                like_query = f"%{query}%"
+                if project_tag:
+                    c.execute("""
+                        SELECT fact, category, confidence, project_tag, last_seen 
+                        FROM facts 
+                        WHERE fact LIKE ? AND project_tag = ?
+                        ORDER BY confidence DESC, last_seen DESC LIMIT ?
+                    """, (like_query, project_tag, limit))
+                else:
+                    c.execute("""
+                        SELECT fact, category, confidence, project_tag, last_seen 
+                        FROM facts 
+                        WHERE fact LIKE ? 
+                        ORDER BY confidence DESC, last_seen DESC LIMIT ?
+                    """, (like_query, limit))
+                rows = c.fetchall()
+
+            for r in rows:
+                tag = f" [{r['project_tag']}]" if r['project_tag'] else ""
+                results.append(f"- **Fact**{tag} ({r['category']}, {int(r['confidence'] * 100)}% conf): {r['fact']}")
+
+            # 2. Search Developer Profile Traits
+            like_query = f"%{query}%"
+            c.execute("""
+                SELECT category, name, description, confidence, frequency 
+                FROM developer_profile 
+                WHERE name LIKE ? OR description LIKE ? 
+                ORDER BY confidence DESC, frequency DESC LIMIT ?
+            """, (like_query, like_query, limit))
+            for r in c.fetchall():
+                results.append(f"- **Developer Profile** [{r['category']} - {r['name']}]: {r['description']}")
+
+            # 3. Search Historical Chat Messages via FTS5
+            try:
+                c.execute("""
+                    SELECT m.session_id, m.role, m.content, m.created_at, s.project_tag 
+                    FROM messages_fts f
+                    JOIN messages m ON f.rowid = m.rowid
+                    LEFT JOIN sessions s ON m.session_id = s.session_id
+                    WHERE messages_fts MATCH ?
+                    ORDER BY m.created_at DESC LIMIT 3
+                """, (query,))
+                for r in c.fetchall():
+                    snippet = r['content'].strip().replace("\n", " ")[:140]
+                    tag = f" [{r['project_tag']}]" if r['project_tag'] else ""
+                    results.append(f"- **Dialogue History**{tag} ({r['created_at'][:10]} {r['role']}): {snippet}...")
+            except sqlite3.OperationalError:
+                pass
+
+    except Exception as e:
+        return f"[-] ULM Recall error: {e}"
+
+    if not results:
+        return f"No memories found matching query '{query}' in ULM database."
+
+    return "### 🧠 ULM Memory Recall Results:\n" + "\n".join(results)
+
+@mcp.tool()
+def ulm_pin_fact(fact: str, category: str = "Technical", project_tag: str = "") -> str:
+    """Instantly writes a high-weight, immutable golden fact directly into the local SQLite database.
+    Pinned facts are immune to temporal decay and pruning.
+
+    Args:
+        fact: The factual statement or verified rule to record into persistent memory.
+        category: Category classification (e.g. 'Technical', 'Preference', 'Architecture', 'Workflow').
+        project_tag: Optional project namespace tag (e.g. 'antigravity-overdrive-sync', 'ComfyUI').
+    """
+    import hashlib
+    db = get_db()
+    fact_id = hashlib.sha256(fact.encode("utf-8")).hexdigest()[:16]
+    now_str = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    tag = project_tag if project_tag else None
+
+    try:
+        with db.get_connection() as conn:
+            c = conn.cursor()
+            c.execute("""
+                INSERT INTO facts (fact_id, fact, category, confidence, first_seen, last_seen, project_tag, weight, pinned, created_at)
+                VALUES (?, ?, ?, 1.0, ?, ?, ?, 2.0, 1, ?)
+                ON CONFLICT(fact_id) DO UPDATE SET
+                    confidence = 1.0,
+                    weight = 2.0,
+                    pinned = 1,
+                    last_seen = excluded.last_seen
+            """, (fact_id, fact, category, now_str, now_str, tag, now_str))
+            conn.commit()
+
+        tag_str = f" for [{project_tag}]" if project_tag else ""
+        return f"[+] Successfully pinned golden fact{tag_str} into ULM memory: \"{fact}\""
+    except Exception as e:
+        return f"[-] Error pinning fact: {e}"
+
+@mcp.tool()
+def ulm_get_playbook(action_name: str) -> str:
+    """Discovers and inspects verified local playbooks and recovery scripts from the ULM Procedural Graph.
+
+    Args:
+        action_name: The procedure or action name to lookup (e.g. 'vram', 'sync', 'model', 'backup').
+    """
+    db = get_db()
+    results = []
+
+    try:
+        with db.get_connection() as conn:
+            conn.row_factory = sqlite3.Row
+            c = conn.cursor()
+            like_term = f"%{action_name}%"
+            c.execute("""
+                SELECT node_id, action_name, target_script_path, expected_outcome, last_execution_status 
+                FROM procedures 
+                WHERE action_name LIKE ? OR target_script_path LIKE ?
+            """, (like_term, like_term))
+            rows = c.fetchall()
+
+            for r in rows:
+                status = f" (Last status: {r['last_execution_status']})" if r['last_execution_status'] else ""
+                results.append(
+                    f"**Playbook**: `{r['action_name']}`{status}\n"
+                    f"- Script Path: `{r['target_script_path']}`\n"
+                    f"- Expected Outcome: {r['expected_outcome']}"
+                )
+    except Exception as e:
+        return f"[-] Error querying procedural graph: {e}"
+
+    if not results:
+        return f"No procedural playbooks found matching '{action_name}'. Check procedures table in sync_state.db."
+
+    return "### 📋 Procedural Playbooks Available:\n\n" + "\n\n".join(results)
+
+@mcp.tool()
+def ulm_check_taboo(command: str) -> str:
+    """Performs a pre-flight validation check on a CLI or terminal command string 
+    against the ULM Taboo Matrix to prevent known syntax landmines and tool execution failures.
+
+    Args:
+        command: The terminal command line string planned for execution.
+    """
+    import re
+    db = get_db()
+    matched_warnings = []
+
+    try:
+        with db.get_connection() as conn:
+            conn.row_factory = sqlite3.Row
+            c = conn.cursor()
+            c.execute("SELECT failure_intent, regex_pattern, remediation, hit_count FROM taboo_rules")
+            for r in c.fetchall():
+                pattern = r["regex_pattern"]
+                if pattern:
+                    try:
+                        if re.search(pattern, command, re.IGNORECASE):
+                            matched_warnings.append(
+                                f"⚠️ **TABOO VIOLATION DETECTED** [{r['failure_intent']}]:\n"
+                                f"  - Pattern Matched: `{pattern}`\n"
+                                f"  - Recommended Remediation: {r['remediation']}"
+                            )
+                    except re.error:
+                        pass
+    except Exception as e:
+        return f"[-] Taboo check error: {e}"
+
+    if matched_warnings:
+        return "\n\n".join(matched_warnings) + "\n\n🚨 **Warning**: Command matches known failure patterns. Modify command before executing."
+
+    return "✅ [PASSED]: Command does not trigger any active Taboo Matrix restrictions."
+
+@mcp.tool()
+def ulm_hardware_status() -> str:
+    """Checks the real-time operational status of local AI compute ports and services 
+    (ComfyUI, SD Forge, Ollama, KoboldCpp) to verify GPU VRAM availability and avoid workload collisions.
+    """
+    ports = {
+        8188: "ComfyUI Workflow Engine",
+        7860: "SD Forge WebUI",
+        11434: "Ollama Local Inference Server",
+        5001: "KoboldCpp Uncensored Server",
+        8890: "ULM Dashboard & Webhook API"
+    }
+
+    status_lines = []
+    active_heavy_workload = False
+
+    for port, name in ports.items():
+        is_open = False
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.settimeout(0.2)
+                if s.connect_ex(("127.0.0.1", port)) == 0:
+                    is_open = True
+        except Exception:
+            pass
+
+        if is_open:
+            status_lines.append(f"- 🟢 **Port {port}** [{name}]: **ONLINE / ACTIVE**")
+            if port in (8188, 7860):
+                active_heavy_workload = True
+        else:
+            status_lines.append(f"- ⚪ **Port {port}** [{name}]: Offline / Inactive")
+
+    arbitration = (
+        "⚠️ **Workload Advisory**: Intensive image diffusion engine (ComfyUI / Forge) is ACTIVE. "
+        "Suppress or throttle heavy local LLM batch bakes to protect 12GB RTX 4070 VRAM."
+        if active_heavy_workload else
+        "✅ **Workload Advisory**: GPU VRAM is clear of active diffusion generation. Local LLM operations are safe."
+    )
+
+    return "### 🖥️ Workstation Hardware & Service Telemetry:\n" + "\n".join(status_lines) + f"\n\n{arbitration}"
+
+if __name__ == "__main__":
+    # Launch stdio transport for native Antigravity MCP integration
+    mcp.run(transport="stdio")
