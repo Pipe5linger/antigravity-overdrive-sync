@@ -1,15 +1,27 @@
 """
 File    : taboo_extractor.py
-Purpose : Graveyard Miner - Scans ULM chat DB for agent tool failures,
-          distills them via local Qwen2.5, and seeds the semantic taboo interceptor matrix.
+Purpose : Graveyard Miner 2.0 - Hybrid Failure Interceptor & Taboo Matrix.
+          1. Instant Deterministic Heuristic Classifier (0ms, 0 VRAM, handles known syntax/PATH/encoding errors).
+          2. Procedural Graph Linkage (auto-routes failures to verified playbooks).
+          3. Fallback Local LLM Distillation (Qwen2.5 only for novel/complex failures).
 """
 
+import sys
 import sqlite3
 import json
+import re
 import urllib.request
 import urllib.error
 import time
 from pathlib import Path
+
+# Enforce UTF-8 terminal piping on Windows
+if sys.platform.startswith("win"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", line_buffering=True)
+        sys.stderr.reconfigure(encoding="utf-8", line_buffering=True)
+    except AttributeError:
+        pass
 
 # --- Workstation Topology Setup ---
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -28,9 +40,55 @@ SYSTEM_PROMPT = (
     "'remediation' (how to fix it instantly or which procedure script to run)."
 )
 
+# --- Tier-2 Instant Deterministic Heuristics (0ms, Zero GPU Contention) ---
+DETERMINISTIC_RULES = [
+    {
+        "pattern": r"The term '([^']+)' is not recognized",
+        "intent": "Command Not Recognized",
+        "regex": r"The term '(?P<cmd>[^']+)' is not recognized",
+        "remediation_fn": lambda m, cmd, err, p: f"Command '{m.group(1)}' is not in Windows PATH. Ensure it is installed or use an existing procedural Python script."
+    },
+    {
+        "pattern": r"SyntaxError: unterminated string literal",
+        "intent": "PowerShell String Escaping SyntaxError",
+        "regex": r"SyntaxError: unterminated string literal",
+        "remediation_fn": lambda m, cmd, err, p: "Do not use python -c with escaped quotes in PowerShell. Always write a temporary .py scratch file instead."
+    },
+    {
+        "pattern": r"ModuleNotFoundError: No module named '([^']+)'",
+        "intent": "Python Module Import Failure",
+        "regex": r"ModuleNotFoundError: No module named '(?P<mod>[^']+)'",
+        "remediation_fn": lambda m, cmd, err, p: f"Module '{m.group(1)}' is missing from the active virtualenv. Run pip install {m.group(1)} or check python sys.path."
+    },
+    {
+        "pattern": r"UnicodeEncodeError: 'charmap' codec can't encode character",
+        "intent": "Windows Charmap Encoding Error",
+        "regex": r"UnicodeEncodeError: 'charmap' codec can't encode character",
+        "remediation_fn": lambda m, cmd, err, p: "Windows console charmap encoding conflict. Enforce UTF-8 piping via sys.stdout.reconfigure(encoding='utf-8') or run vram_guard.py."
+    },
+    {
+        "pattern": r"OutOfMemoryError: CUDA out of memory",
+        "intent": "GPU VRAM Exhaustion",
+        "regex": r"OutOfMemoryError: CUDA out of memory",
+        "remediation_fn": lambda m, cmd, err, p: "RTX 4070 VRAM ceiling hit. Terminate background LLMs or run python scripts/generators_and_tools/vram_guard.py."
+    },
+    {
+        "pattern": r"Array index expression is missing or not valid",
+        "intent": "PowerShell Array Index Syntax Error",
+        "regex": r"Array index expression is missing or not valid",
+        "remediation_fn": lambda m, cmd, err, p: "PowerShell f-string array index collision. Avoid raw inline array indexing in terminal strings; use a dedicated .py script."
+    },
+    {
+        "pattern": r"ValueError: not enough values to unpack \(expected (\d+), got (\d+)\)",
+        "intent": "ValueError: Tuple Unpacking Mismatch",
+        "regex": r"ValueError: not enough values to unpack",
+        "remediation_fn": lambda m, cmd, err, p: "Unpacking signature mismatch. Verify return values or run python main.py sync --force."
+    }
+]
+
 def setup_taboo_matrix(cursor):
     """Initializes the taboo_rules table if it doesn't already exist."""
-    print("🛡️ Initializing Taboo Matrix in ULM...")
+    print("[*] Initializing Taboo Matrix in ULM...")
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS taboo_rules (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -42,20 +100,43 @@ def setup_taboo_matrix(cursor):
         )
     """)
 
+def match_deterministic_heuristic(command: str, stderr: str, cursor) -> dict | None:
+    """Fast-path classification: Evaluates stderr against deterministic patterns in 0.001ms."""
+    combined = f"{command}\n{stderr}"
+    for rule in DETERMINISTIC_RULES:
+        match = re.search(rule["pattern"], combined, re.IGNORECASE)
+        if match:
+            # Query procedural graph playbooks to enrich remediation if applicable
+            playbook_hint = ""
+            try:
+                cursor.execute("SELECT action_name, target_script_path FROM procedures WHERE action_name LIKE ? LIMIT 1", (f"%{rule['intent'][:10]}%",))
+                row = cursor.fetchone()
+                if row:
+                    playbook_hint = f" Alternatively, trigger procedure '{row[0]}' via {row[1]}."
+            except Exception:
+                pass
+
+            remediation = rule["remediation_fn"](match, command, stderr, None) + playbook_hint
+            return {
+                "failure_intent": rule["intent"],
+                "regex_pattern": rule["regex"],
+                "remediation": remediation,
+                "engine": "heuristic"
+            }
+    return None
+
 def distill_failure_via_ollama(command: str, stderr: str, cursor) -> dict | None:
-    """Pipes the failure through local Qwen2.5 to extract the structural taboo rule."""
-    
-    # Fetch procedural graph nodes to see if there's an existing playbook
+    """Pipes novel or complex failures through local Qwen2.5 to extract the structural taboo rule."""
     try:
         cursor.execute("SELECT action_name, target_script_path FROM procedures LIMIT 20")
         procedures = cursor.fetchall()
-        graph_context = "\\nAvailable Playbooks in Graph:\\n"
+        graph_context = "\nAvailable Playbooks in Graph:\n"
         for p in procedures:
-            graph_context += f"- Action: {p[0]} -> Script: {p[1]}\\n"
+            graph_context += f"- Action: {p[0]} -> Script: {p[1]}\n"
     except sqlite3.OperationalError:
-        graph_context = "\\n(No playbooks available in graph)\\n"
+        graph_context = "\n(No playbooks available in graph)\n"
         
-    user_prompt = f"Command Attempted: `{command}`\\nError Output: `{stderr}`\\n{graph_context}\\nAnalyze and distill this failure."
+    user_prompt = f"Command Attempted: `{command}`\nError Output: `{stderr}`\n{graph_context}\nAnalyze and distill this failure."
     
     payload = json.dumps({
         "model": OLLAMA_MODEL,
@@ -75,23 +156,23 @@ def distill_failure_via_ollama(command: str, stderr: str, cursor) -> dict | None
     )
 
     try:
-        with urllib.request.urlopen(req, timeout=300) as resp:
+        with urllib.request.urlopen(req, timeout=120) as resp:
             body = json.loads(resp.read().decode("utf-8"))
             response_text = body.get("response", "{}")
-            return json.loads(response_text)
+            res = json.loads(response_text)
+            res["engine"] = "ollama_qwen"
+            return res
     except Exception as e:
-        print(f"⚠️ [Ollama Distillation Failed]: {e}")
+        print(f"[!] [Ollama Distillation Skipped/Failed]: {e}")
         return None
 
 def mine_the_graveyard():
-    """Scans ULM for failed tool executions and seeds the taboo interceptor."""
+    """Scans ULM for failed tool executions and seeds the taboo interceptor using the hybrid engine."""
     if not ULM_DB_PATH.exists():
-        print(f"🔥 Error: ULM Database not found at {ULM_DB_PATH}")
+        print(f"[-] Error: ULM Database not found at {ULM_DB_PATH}")
         return
 
-    print(f"🦇 Connecting to ULM memory core at: {ULM_DB_PATH}")
-    
-    # Force WAL mode for aggressive concurrent read/writes
+    print(f"[*] Connecting to ULM memory core at: {ULM_DB_PATH}")
     conn = sqlite3.connect(ULM_DB_PATH, isolation_level=None)
     conn.execute('pragma journal_mode=wal')
     cursor = conn.cursor()
@@ -107,25 +188,34 @@ def mine_the_graveyard():
         """)
         failed_executions = cursor.fetchall()
     except sqlite3.OperationalError:
-        print("⚠️ 'tool_execution_logs' table empty or not found. Insert your actual ULM log table name.")
+        print("[-] 'tool_execution_logs' table empty or not found.")
         failed_executions = []
 
     if not failed_executions:
-        print("📭 Graveyard is empty. No failures detected in the swept tables.")
+        print("[*] Graveyard is empty. No failures detected in the swept tables.")
         conn.close()
         return
 
-    print(f"💀 Found {len(failed_executions)} raw failures. Initiating semantic distillation...")
+    print(f"[*] Found {len(failed_executions)} raw failures. Running Tier-2 Hybrid Distillation...")
 
     success_count = 0
+    heuristic_count = 0
+    ollama_count = 0
+
     for cmd, err in failed_executions:
-        print(f"\\nDistilling: `{cmd[:40]}...`")
-        rule = distill_failure_via_ollama(cmd, err, cursor)
+        # 1. Try Instant Heuristic Classifier (0ms, 0 VRAM)
+        rule = match_deterministic_heuristic(cmd, err, cursor)
         
+        # 2. Fall back to local Ollama if novel/unrecognized
+        if not rule:
+            print(f"   [Novel Failure] Routing to Ollama: `{cmd[:40]}...`")
+            rule = distill_failure_via_ollama(cmd, err, cursor)
+
         if rule and "failure_intent" in rule:
             intent = rule["failure_intent"]
             regex = rule.get("regex_pattern", "")
             remediation = rule.get("remediation", "")
+            engine_used = rule.get("engine", "unknown")
             
             try:
                 cursor.execute("""
@@ -134,14 +224,16 @@ def mine_the_graveyard():
                     ON CONFLICT(failure_intent) DO UPDATE SET 
                         hit_count = hit_count + 1
                 """, (intent, regex, remediation))
-                print(f"   ✔️ Seeded Rule: [{intent}] -> {remediation}")
+                print(f"   [+] [{engine_used.upper()}] Rule: [{intent}] -> {remediation[:60]}...")
                 success_count += 1
+                if engine_used == "heuristic":
+                    heuristic_count += 1
+                else:
+                    ollama_count += 1
             except Exception as db_err:
-                print(f"   ❌ DB Insert Error: {db_err}")
-                
-        time.sleep(0.5)
+                print(f"   [-] DB Insert Error: {db_err}")
 
-    print(f"\\n🏆 Mining Complete. Seeded {success_count} semantic taboo rules into the ULM core.")
+    print(f"\n[+] Mining Complete. Seeded/Updated {success_count} rules (⚡ {heuristic_count} instant heuristics, 🧠 {ollama_count} LLM distillations).")
     conn.close()
 
 if __name__ == "__main__":
