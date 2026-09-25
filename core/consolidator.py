@@ -577,3 +577,63 @@ class MemoryConsolidator:
 
         print(f"[+] MemoryConsolidator: Consolidation complete! Deleted {total_deleted} facts, upserted {total_upserted} golden facts")
         return total_deleted, total_upserted
+
+    def ingest_transcripts(self, force_all: bool = False) -> Dict[str, int]:
+        """Ingests recent Antigravity / Cline session transcripts from watched paths,
+        extracts high-signal facts and developer traits using FactExtractor,
+        and saves them directly into SQLite facts and developer_profile tables.
+        """
+        from parsers.antigravity import AntigravityParser
+        from core.fact_extractor import FactExtractor
+        import hashlib
+
+        parser = AntigravityParser()
+        payloads = parser.fetch_new_logs(force_ingest=force_all)
+        if not payloads:
+            print("[*] MemoryConsolidator: No new transcripts detected for ingestion.")
+            return {"sessions": 0, "facts_extracted": 0}
+
+        extractor = FactExtractor()
+        total_facts = 0
+        now_str = datetime.datetime.now(datetime.timezone.utc).isoformat()
+
+        # Import logs into messages/sessions in DB
+        try:
+            self.db.import_raw_logs(payloads)
+        except Exception as e:
+            print(f"[-] MemoryConsolidator: Failed importing raw session logs: {e}")
+
+        for payload in payloads:
+            chat_id = payload.get("chat_id", "unknown")
+            project_tag = payload.get("project_tag")
+            messages = payload.get("messages", [])
+            
+            # Combine messages into readable transcript block
+            dialogue_text = "\n".join([f"{m.get('sender', 'Unknown')}: {m.get('text', '')}" for m in messages if m.get('text')])
+            if not dialogue_text:
+                continue
+
+            extracted = extractor.extract(dialogue_text)
+            for item in extracted:
+                fact_text = item["fact"]
+                category = item.get("category", "technical")
+                confidence = item.get("confidence", 0.95)
+                fact_id = hashlib.sha256(fact_text.strip().lower().encode("utf-8")).hexdigest()[:16]
+
+                try:
+                    with self.db.get_connection() as conn:
+                        c = conn.cursor()
+                        c.execute("""
+                            INSERT INTO facts (fact_id, fact, category, confidence, first_seen, last_seen, project_tag, weight, pinned, created_at)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, 1.0, 0, ?)
+                            ON CONFLICT(fact_id) DO UPDATE SET
+                                last_seen = excluded.last_seen,
+                                confidence = MAX(facts.confidence, excluded.confidence)
+                        """, (fact_id, fact_text, category, confidence, now_str, now_str, project_tag, now_str))
+                        conn.commit()
+                        total_facts += 1
+                except Exception as e:
+                    print(f"[-] MemoryConsolidator: Error saving fact from session {chat_id[:8]}: {e}")
+
+        print(f"[+] MemoryConsolidator: Ingested {len(payloads)} sessions and extracted {total_facts} active semantic facts.")
+        return {"sessions": len(payloads), "facts_extracted": total_facts}

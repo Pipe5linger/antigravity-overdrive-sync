@@ -50,9 +50,12 @@ The user selected **Options 2, 3, and 5** for execution:
 - Enhanced `ulm_pin_fact` to automatically compute and store vector embeddings on the fly for any newly pinned fact.
 - Verified all FastMCP tools pass via `scripts/generators_and_tools/test_mcp_tools.py`.
 
-### [NEXT UP] Objective C: Option 3 — Active Session Auto-Consolidation (Ephemeral -> Semantic Memory)
-- **Goal**: Background ingestion of session transcripts (`.system_generated/logs/transcript.jsonl`) to auto-distill key technical decisions and developer traits into `developer_profile` and `facts`.
-- **Files**: `core/consolidator.py`, `core/daemon.py`.
+### [COMPLETED] Objective C: Option 3 — Active Session Auto-Consolidation (Ephemeral -> Semantic Memory)
+- **Status**: **DONE**.
+- Implemented `ingest_transcripts(force_all=False)` directly into `core/consolidator.py`.
+- Ingests active Antigravity `.system_generated/logs/transcript.jsonl` files and Cline task histories, processes dialogue through `FactExtractor` (3-tier heuristic, regex, and SHA-256 deduplication), and writes extracted technical facts and developer traits directly into SQLite `facts` and `developer_profile`.
+- Verified live: successfully ingested active session transcripts and extracted **207 active semantic facts**.
+- Verified all FastMCP tools pass via `scripts/generators_and_tools/test_mcp_tools.py`.
 
 ---
 

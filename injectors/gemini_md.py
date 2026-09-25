@@ -61,11 +61,9 @@ class GeminiMdInjector(BaseInjector):
         """Generates the master persona payload and syncs it to the single master target."""
         header_banner = "# VESPERA CALIGO MASTER SYSTEM PROTOCOL\n" + "=" * 80 + "\n"
         
-        if db is not None:
-            updated_content = f"{header_banner}" + GoogleDocsInjector().compile_google_docs_payload(db)
-        else:
-            payload = self.assembler.build_identity_header()
-            updated_content = f"{header_banner}{payload}"
+        # Always use the lean assembled identity header to preserve the <5KB protocol size
+        payload = self.assembler.build_identity_header(purge_mirrors=True)
+        updated_content = f"{header_banner}{payload}"
 
         if dry_run:
             print(f"[DRY RUN] Would write single master protocol to: {self.master_protocol_file}")
