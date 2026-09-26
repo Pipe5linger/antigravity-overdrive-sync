@@ -57,13 +57,30 @@ def get_release(release_id_or_tag: str, repo: str = REPO_DEFAULT):
     with urllib.request.urlopen(req) as resp:
         return json.loads(resp.read().decode('utf-8'))
 
-def upload_asset(release_id: int, file_path: str, repo: str = REPO_DEFAULT):
+def delete_asset(asset_id: int, repo: str = REPO_DEFAULT):
+    """Delete an existing asset from a release."""
+    token = get_git_token()
+    url = f"https://api.github.com/repos/{repo}/releases/assets/{asset_id}"
+    req = urllib.request.Request(url, headers=_get_headers(token), method='DELETE')
+    with urllib.request.urlopen(req) as resp:
+        return resp.status in (200, 204)
+
+def upload_asset(release_id: int, file_path: str, repo: str = REPO_DEFAULT, replace: bool = True):
     """Upload a distribution file or binary to a specific release."""
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"File not found: {file_path}")
     
     filename = os.path.basename(file_path)
     token = get_git_token()
+    
+    if replace:
+        rel = get_release(release_id, repo=repo)
+        for a in rel.get('assets', []):
+            if a.get('name') == filename:
+                print(f"[INFO] Removing previous asset '{filename}' (ID: {a.get('id')})...")
+                delete_asset(a.get('id'), repo=repo)
+                break
+
     upload_url = f"https://uploads.github.com/repos/{repo}/releases/{release_id}/assets?name={filename}"
     
     with open(file_path, "rb") as f:
