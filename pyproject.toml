@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "ulm-engine"
 version = "1.0.0"
-description = "Universal Local Memory (ULM) Engine - A local-first, vector-aware cognitive ledger and memory sync pipeline for AI co-pilots."
+description = "Universal Local Memory (ULM) - A lightweight, persistent memory layer for AI coding assistants."
 readme = "README.md"
 authors = [
     { name = "ULM Engine Contributors" }
@@ -30,6 +30,7 @@ dependencies = [
     "fastapi>=0.95.0",
     "uvicorn>=0.21.0",
     "rich>=13.0.0",
+    "python-dotenv>=1.0.0",
 ]
 
 [project.optional-dependencies]
@@ -41,9 +42,12 @@ test = [
 [project.scripts]
 ulm = "main:main"
 
+[tool.setuptools]
+py-modules = ["main"]
+
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["core*", "injectors*", "normalizers*", "parsers*", "tui*"]
+include = ["core*", "injectors*", "normalizers*", "parsers*", "tui*", "scripts*"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
