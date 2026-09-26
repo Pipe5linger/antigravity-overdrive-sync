@@ -87,7 +87,7 @@ DETERMINISTIC_RULES = [
 ]
 
 def setup_taboo_matrix(cursor):
-    """Initializes the taboo_rules table if it doesn't already exist."""
+    """Initializes the taboo_rules table if it doesn't already exist and ensures last_seen exists."""
     print("[*] Initializing Taboo Matrix in ULM...")
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS taboo_rules (
@@ -96,9 +96,30 @@ def setup_taboo_matrix(cursor):
             regex_pattern TEXT,
             remediation TEXT,
             hit_count INTEGER DEFAULT 1,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            last_seen DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     """)
+    try:
+        cursor.execute("ALTER TABLE taboo_rules ADD COLUMN last_seen DATETIME DEFAULT CURRENT_TIMESTAMP")
+    except sqlite3.OperationalError:
+        pass
+
+
+def retire_stale_taboos(cursor, max_age_days: int = 30) -> int:
+    """Auto-retires stale taboo rules not observed within max_age_days to prevent prompt bloat."""
+    try:
+        cursor.execute("""
+            DELETE FROM taboo_rules 
+            WHERE last_seen < datetime('now', '-' || ? || ' days')
+        """, (max_age_days,))
+        pruned = cursor.rowcount
+        if pruned > 0:
+            print(f"[+] Taboo Matrix: Auto-retired {pruned} stale failure patterns (older than {max_age_days}d).")
+        return pruned
+    except Exception as e:
+        print(f"[-] Taboo Matrix: Error retiring stale rules: {e}")
+        return 0
 
 def match_deterministic_heuristic(command: str, stderr: str, cursor) -> dict | None:
     """Fast-path classification: Evaluates stderr against deterministic patterns in 0.001ms."""
@@ -219,10 +240,11 @@ def mine_the_graveyard():
             
             try:
                 cursor.execute("""
-                    INSERT INTO taboo_rules (failure_intent, regex_pattern, remediation)
-                    VALUES (?, ?, ?)
+                    INSERT INTO taboo_rules (failure_intent, regex_pattern, remediation, last_seen)
+                    VALUES (?, ?, ?, CURRENT_TIMESTAMP)
                     ON CONFLICT(failure_intent) DO UPDATE SET 
-                        hit_count = hit_count + 1
+                        hit_count = hit_count + 1,
+                        last_seen = CURRENT_TIMESTAMP
                 """, (intent, regex, remediation))
                 print(f"   [+] [{engine_used.upper()}] Rule: [{intent}] -> {remediation[:60]}...")
                 success_count += 1
@@ -233,8 +255,14 @@ def mine_the_graveyard():
             except Exception as db_err:
                 print(f"   [-] DB Insert Error: {db_err}")
 
+    # Auto-retire dead failure patterns not observed in 30 days
+    retire_stale_taboos(cursor, max_age_days=30)
+
     print(f"\n[+] Mining Complete. Seeded/Updated {success_count} rules (⚡ {heuristic_count} instant heuristics, 🧠 {ollama_count} LLM distillations).")
     conn.close()
+
+# Alias for daemon integration
+distill_graveyard = mine_the_graveyard
 
 if __name__ == "__main__":
     mine_the_graveyard()

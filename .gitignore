@@ -40,9 +40,14 @@ db/
 # Temporary & Test Artifacts
 scratch/
 .pytest_cache/
+*.egg-info/
+build/
+dist/
 
 # Local System Memory / Drive Logs
 D:/Memory/
+core/last_sync.txt
+last_sync.txt
 
 # Token usage log
 token_usage_log.csv

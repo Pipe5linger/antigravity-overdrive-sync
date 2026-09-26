@@ -2,6 +2,7 @@ import sqlite3
 import datetime
 import hashlib
 import os
+import threading
 from pathlib import Path
 
 DEFAULT_DB_PATH = Path(__file__).resolve().parent.parent / "db" / "sync_state.db"
@@ -9,15 +10,29 @@ DEFAULT_DB_PATH = Path(__file__).resolve().parent.parent / "db" / "sync_state.db
 class ULMDatabase:
     def __init__(self, db_path=None):
         self.db_path = str(db_path) if db_path else str(DEFAULT_DB_PATH)
+        self._local = threading.local()
 
     def get_connection(self):
-        """Returns a configured connection to the SQLite database."""
-        conn = sqlite3.connect(self.db_path)
-        if "test" not in self.db_path.lower() and self.db_path != ":memory:":
-            conn.execute("PRAGMA journal_mode = WAL;")
-        conn.execute("PRAGMA busy_timeout = 5000;")
-        conn.execute("PRAGMA foreign_keys = ON;")
+        """Returns a thread-local configured connection to the SQLite database."""
+        conn = getattr(self._local, "conn", None)
+        if conn is None:
+            conn = sqlite3.connect(self.db_path, check_same_thread=False)
+            if "test" not in self.db_path.lower() and self.db_path != ":memory:":
+                conn.execute("PRAGMA journal_mode = WAL;")
+            conn.execute("PRAGMA busy_timeout = 5000;")
+            conn.execute("PRAGMA foreign_keys = ON;")
+            self._local.conn = conn
         return conn
+
+    def close(self):
+        """Closes the current thread's connection if active."""
+        conn = getattr(self._local, "conn", None)
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
+            self._local.conn = None
 
     def initialize_db(self):
         try:
@@ -992,4 +1007,66 @@ class ULMDatabase:
         except sqlite3.Error as e:
             print(f"[-] Error fetching failed tool logs: {e}")
             return []
+
+    def deduplicate_persona_schemas(self):
+        """
+        Consolidates redundant persona schemas into canonical belief categories.
+        Collapses near-duplicate schemas (e.g. slight phrasing variations of workspace/paths),
+        preserving the highest-confidence, most detailed belief for each canonical category.
+        """
+        def canonical_category(cat: str) -> str:
+            c_clean = cat.lower().replace('-', ' ').replace('_', ' ').strip()
+            if any(k in c_clean for k in ['directory', 'workspace', 'storage', 'drive', 'tool', 'environment', 'setup', 'technology', 'system architecture', 'software configuration', 'file path', 'file location', 'project space', 'project structure', 'project path', 'project organization', 'caching']):
+                return 'workspace_and_tooling'
+            elif any(k in c_clean for k in ['ethos', 'engineering', 'pragmatic', 'principle', 'quality']):
+                return 'engineering_ethos'
+            elif any(k in c_clean for k in ['relationship', 'bond', 'bobby', 'pilot', 'vespera']):
+                return 'relationship_bond'
+            elif any(k in c_clean for k in ['image', 'synthesis', 'zit', 'flux', 'lora', 'render']):
+                return 'image_synthesis'
+            elif any(k in c_clean for k in ['hardware', 'gpu', 'vram', 'rtx', 'topology']):
+                return 'hardware_and_topology'
+            elif any(k in c_clean for k in ['veteran', 'benefits', 'funding fee', 'disability']):
+                return 'personal_background'
+            return c_clean.replace(' ', '_')
+
+        try:
+            with self.get_connection() as conn:
+                conn.row_factory = sqlite3.Row
+                c = conn.cursor()
+                c.execute("SELECT schema_id, belief_category, current_belief, confidence, last_mutated, evolution_history FROM persona_schemas")
+                rows = [dict(r) for r in c.fetchall()]
+                if not rows:
+                    return 0
+
+                from collections import defaultdict
+                grouped = defaultdict(list)
+                for r in rows:
+                    canon = canonical_category(r["belief_category"])
+                    grouped[canon].append(r)
+
+                total_pruned = 0
+                for canon_cat, group in grouped.items():
+                    if len(group) <= 1:
+                        if group and group[0]["belief_category"] != canon_cat:
+                            c.execute("UPDATE persona_schemas SET belief_category = ? WHERE schema_id = ?", (canon_cat, group[0]["schema_id"]))
+                        continue
+
+                    # Sort by confidence descending, then by length of belief text
+                    group.sort(key=lambda x: (x.get("confidence") or 0.0, len(x.get("current_belief") or "")), reverse=True)
+                    winner = group[0]
+                    losers = group[1:]
+
+                    c.execute("UPDATE persona_schemas SET belief_category = ? WHERE schema_id = ?", (canon_cat, winner["schema_id"]))
+
+                    for loser in losers:
+                        c.execute("DELETE FROM persona_schemas WHERE schema_id = ?", (loser["schema_id"],))
+                        total_pruned += 1
+
+                conn.commit()
+                print(f"[+] Persona Schemas: Deduplicated {len(rows)} down to {len(grouped)} canonical schemas ({total_pruned} redundant schemas pruned).")
+                return total_pruned
+        except sqlite3.Error as e:
+            print(f"[-] Error deduplicating persona schemas: {e}")
+            return 0
 

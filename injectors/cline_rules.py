@@ -9,6 +9,7 @@ Description: Dynamically injects assembled persona baseline directives, telemetr
 import sys
 from pathlib import Path
 from core.assembler import DynamicPromptAssembler
+from core.utils import atomic_write
 from injectors.base import BaseInjector
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -35,10 +36,7 @@ class ClineRulesInjector(BaseInjector):
             if dry_run:
                 print(f"[DRY RUN] Would write to {self.output_file}")
                 return True
-            self.output_file.parent.mkdir(parents=True, exist_ok=True)
-            with open(self.output_file, "w", encoding="utf-8") as f:
-                f.write(content)
-                
+            atomic_write(self.output_file, content)
             print(f"[+] Successfully synced: {self.output_file}")
             return True
         except Exception as e:

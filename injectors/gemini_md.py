@@ -16,6 +16,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from core.assembler import DynamicPromptAssembler
+from core.utils import atomic_write
 from injectors.base import BaseInjector
 from injectors.google_docs import GoogleDocsInjector
 
@@ -72,12 +73,9 @@ class GeminiMdInjector(BaseInjector):
         # 1. Clean up duplicate ghost rule files across disk
         self.purge_duplicates()
 
-        # 2. Inject into the single sovereign master file
+        # 2. Inject into the single sovereign master file atomically
         try:
-            self.master_protocol_file.parent.mkdir(parents=True, exist_ok=True)
-            with open(self.master_protocol_file, "w", encoding="utf-8") as f:
-                f.write(updated_content)
-                
+            atomic_write(self.master_protocol_file, updated_content)
             print(f"[+] Successfully synced single master protocol: {self.master_protocol_file}")
             return True
         except Exception as e:

@@ -409,6 +409,11 @@ class MemoryConsolidator:
         Vector-aware consolidation: Clusters similar facts and synthesizes them into Golden Truths.
         """
         self.prune_stale_facts()
+        if hasattr(self.db, "deduplicate_persona_schemas"):
+            try:
+                self.db.deduplicate_persona_schemas()
+            except Exception as e:
+                print(f"[-] Consolidator: Persona schema deduplication error: {e}")
 
         llm_provider = self.db.get_preference("llm_provider", "local_ollama")
         llm_model = self.db.get_preference("llm_model", "qwen2.5:7b-instruct")

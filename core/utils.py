@@ -62,7 +62,7 @@ class AsyncTokenBucket:
             return True
 
 
-def atomic_write(file_path, content, mode="w", encoding="utf-8"):
+def atomic_write(file_path, content, mode="w", encoding="utf-8", retries=3):
     tmp_file_name = None
     try:
         target_path = Path(file_path)
@@ -75,10 +75,24 @@ def atomic_write(file_path, content, mode="w", encoding="utf-8"):
             tmp_file_name = tmp_file.name
             tmp_file.write(content)
 
-        os.replace(tmp_file_name, target_path)
+        # Retry loop for Windows file locking contention
+        last_err = None
+        for attempt in range(retries):
+            try:
+                os.replace(tmp_file_name, target_path)
+                return True
+            except (PermissionError, OSError) as e:
+                last_err = e
+                time.sleep(0.05 * (2 ** attempt))
+
+        if last_err:
+            raise last_err
     except Exception as e:
         if tmp_file_name and Path(tmp_file_name).exists():
-            os.unlink(tmp_file_name)
+            try:
+                os.unlink(tmp_file_name)
+            except Exception:
+                pass
         raise RuntimeError(f"Atomic write failed: {e}") from e
 
 

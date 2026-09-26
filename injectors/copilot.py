@@ -14,6 +14,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from core.assembler import DynamicPromptAssembler
+from core.utils import atomic_write
 
 class CopilotInjector:
     def __init__(self, workspace_root=None, db_path=None, llm_model=None, vector_model=None):
@@ -54,8 +55,7 @@ class CopilotInjector:
                 return True
 
             # 1. Sync Workspace Copilot Instructions
-            self.output_file.parent.mkdir(parents=True, exist_ok=True)
-            self.output_file.write_text(content, encoding="utf-8")
+            atomic_write(self.output_file, content)
             print(f"[+] Successfully synced Copilot instructions: {self.output_file}")
 
             # 2. Sync VS Code Queen Ves Custom Agent (@QueenVes)
@@ -71,11 +71,11 @@ class CopilotInjector:
                     "---\n\n"
                     f"{content}\n"
                 )
-                self.queen_ves_agent_file.write_text(queen_agent_content, encoding="utf-8")
+                atomic_write(self.queen_ves_agent_file, queen_agent_content)
                 print(f"[+] Successfully synced VS Code Queen Ves Agent: {self.queen_ves_agent_file}")
                 
                 # Also keep legacy Ves.agent.md updated
-                self.ves_agent_file.write_text(queen_agent_content, encoding="utf-8")
+                atomic_write(self.ves_agent_file, queen_agent_content)
                 print(f"[+] Successfully synced legacy Ves Agent: {self.ves_agent_file}")
 
             return True
