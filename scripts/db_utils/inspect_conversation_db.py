@@ -26,7 +26,7 @@ def inspect():
 
         # Grab a sample row
         try:
-            cursor.execute(f"SELECT * FROM {table} LIMIT 1;")
+            cursor.execute(f"SELECT * FROM \"{table}\" LIMIT 1;")
             sample = cursor.fetchone()
             print(f"Sample row: {sample}")
         except Exception as e:

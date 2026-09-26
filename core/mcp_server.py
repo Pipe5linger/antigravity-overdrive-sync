@@ -441,6 +441,11 @@ def ulm_inspect_db(table: str = "", limit: int = 5, schema: bool = False) -> str
                 return "\n".join(lines)
 
             # Specific table
+            c.execute("SELECT name FROM sqlite_master WHERE type='table'")
+            valid_tables = {r[0] for r in c.fetchall()}
+            if table not in valid_tables:
+                return f"Error: Table '{table}' not found in database."
+
             lines = [f"### 📋 Table: `{table}`"]
             if schema:
                 c.execute(f"PRAGMA table_info(\"{table}\")")

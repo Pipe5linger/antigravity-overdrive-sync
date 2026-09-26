@@ -1,157 +1,140 @@
-# Antigravity Overdrive Sync (Universal Local Memory)
+# Universal Local Memory (ULM)
 
-Welcome! This is a local, multi-threaded pipeline built to grab AI chat histories, process them, and compile structured milestone summaries and memory rules straight into your local markdown systems (like `.clinerules` or `GEMINI.md`). It keeps a persistent, queryable state record inside a local SQLite database and features a clean terminal user interface (TUI).
-
----
-
-## 🚀 Key Features
-
-* **Relational Memory Storage**: Migrated from flat YAML files to an optimized, transaction-safe SQLite database running in WAL (Write-Ahead Logging) mode.
-* **TUI Dashboard Control**: A terminal user interface (`rich`-powered) to monitor database metrics, sync logs on demand, update preferences, and read your behavioral telemetry in real-time.
-* **Background Daemon Poller**: A folder-watcher script (`core/daemon.py`) that monitors workspace transcripts and runs synchronization cycles automatically in the background.
-* **Memory Consolidation (Conflict Resolution)**: Uses a local LLM or Gemini to batch-evaluate facts periodically, pruning contradictory information, merging redundancies, and maintaining "fact aging."
-* **Context-Aware Workspace Tagging**: Automatically extracts project tags based on execution paths (`Cwd`) from your logs, prioritizing rules and memories depending on the active workspace you are coding in.
-* **Hierarchical Memory Cores**: Constructs context-rich system prompts divided into distinct tiers (Tier 1 Episodic/Temporal, Tier 2 Cognitive/Behavioral, Tier 3 Semantic/Facts) to keep active contexts clean and within tight token limits.
-* **Procedural Graph Engine**: Maps explicit developer intents directly to executable local scripts in a relational graph, providing automated playbooks for recurring workflows.
-* **Graveyard Miner (Taboo Interceptor Matrix)**: Actively mines `stderr` execution failures from chat logs, distills them via local Qwen2.5 (14B), and hard-codes them into a semantic burn list (Taboo Protocols) to physically prevent AI tool hallucinations and repeated syntax errors.
+A lightweight, persistent memory layer for AI coding assistants.
 
 ---
 
-## 📖 Step-by-Step Setup & User Guide
+## The Problem
 
-Whether you want to run ULM as a background memory daemon or use the interactive console dashboard, here is how to get running in under 2 minutes:
+Most AI coding assistants operate between two frustrating extremes:
 
-### 1. Requirements & Prerequisites
-- **Python 3.10+** (Python 3.11 recommended)
-- **Git**
-- Optional: **Ollama** or **KoboldCpp** (for local offline LLM summarization) or a **Google Gemini API Key** (for cloud summarization).
+1. **Session Amnesia:** Opening a new chat resets the assistant to zero. You find yourself repeatedly re-explaining your stack, hardware constraints, file paths, and personal preferences.
+2. **Context Bloat & Token Degradation:** Keeping a single sprawling conversation open causes the entire transcript to be re-sent with every prompt. This inflates input costs, exhausts context windows, slows down generation, and dilutes model attention.
 
-### 2. Installation
+**ULM provides a middle ground.** It runs locally in the background, extracts meaningful facts and recurring failure patterns from your session logs, and injects a compact, structured memory block into your workspace rules (`.clinerules`, `GEMINI.md`, or local Modelfiles).
+
+---
+
+## Core Capabilities
+
+* **Bounded Context Injection:** Keeps active prompt overhead capped (typically under 800 tokens) using structured memory tiers rather than dumping raw transcripts.
+* **Negative Constraint Tracking (Error Graveyard):** Records terminal execution failures and tool tracebacks into an indexed list of taboos, actively preventing the model from re-attempting known broken commands.
+* **Multi-Environment Synchronization:** Maintains consistency across Antigravity, Cline, Copilot, and local Ollama models from a single local database.
+* **Local & Private by Design:** All sessions, facts, and embeddings reside in a local SQLite database on your machine. No telemetry or proprietary code is shared with external services.
+* **Automated Background Ingestion:** Monitors workspace logs and updates your instruction files automatically as you code.
+
+---
+
+## Quickstart
+
+### Prerequisites
+* **Python 3.10+** (Python 3.11 recommended)
+* **Git**
+
+### Installation
 ```bash
 # 1. Clone the repository
 git clone https://github.com/Pipe5linger/antigravity-overdrive-sync.git
 cd antigravity-overdrive-sync
 
-# 2. Create and activate a virtual environment (recommended)
+# 2. Set up a virtual environment
 python -m venv venv
+
 # On Windows PowerShell:
 .\venv\Scripts\Activate.ps1
-# On Linux/macOS:
+# On macOS / Linux:
 source venv/bin/activate
 
 # 3. Install dependencies
 pip install -r requirements.txt
 ```
 
-### 3. Environment Setup (`.env`)
-Create a `.env` file in the root directory:
+### Configuration (Optional)
+If you want cloud-assisted summarization or local model routing, copy `.env.example` to `.env`:
 ```env
-# Optional: Set Gemini API key for cloud summarization
+# Optional: Google Gemini API key for cloud summarization
 GEMINI_API_KEY="your-api-key-here"
 
-# Optional: Set local LLM model names for Ollama/Kobold
-LLM_MODEL="qwen2.5-coder-14b-32k-Vespera:latest"
-VECTOR_MODEL="nomic-embed-text:latest"
+# Optional: Local model identifier for Ollama
+LLM_MODEL="qwen2.5-coder:latest"
 ```
 
-### 4. Running ULM
+---
 
-ULM automatically detects chat transcripts from multiple sources:
-- **Google Antigravity IDE Sessions** (`~/.gemini/antigravity/brain/*/transcript.jsonl`)
-- **Roo-Cline & Cline Extension Transcripts** (`%APPDATA%/Code/User/globalStorage/.../tasks`)
-- **Gemini Web Chat Exports** (JSON & Markdown exports in `Downloads` or `Downloads/Gemini chats`)
+## Running ULM
 
-#### Option A: Manual One-Shot Sync
-Scans all active workspace transcripts, updates the SQLite database, and compiles dynamic system prompts (`GEMINI.md` / `.clinerules`):
+### 1. Manual One-Shot Sync
+Scans recent workspace logs, extracts new facts, and updates your prompt instruction files:
 ```bash
 python main.py sync
 ```
 
-#### Option B: Terminal Dashboard TUI
-Launches the interactive `rich`-powered console dashboard:
+### 2. Terminal Dashboard (TUI)
+Launches an interactive, `rich`-powered console interface to monitor database tables, view captured taboos, and inspect token metrics:
 ```bash
 python main.py tui
 ```
 
-#### Option C: Background Daemon Poller (Automated)
-Runs the lightweight poller loop to automatically sync memories whenever transcript files change in your workspace:
+### 3. Background Daemon
+Runs a lightweight file watcher that synchronizes memories whenever transcripts update:
 ```bash
 python main.py daemon
 ```
-*Tip for Windows users*: You can run the daemon silently in the background without keeping a console window open using `sync_silent.vbs` or `daemon_silent.vbs`.
+*Windows users can also use `sync_silent.vbs` or `daemon_silent.vbs` to run silently in the background without keeping a console window open.*
 
 ---
 
-## 🛠️ How It Works (Architecture Overview)
+## Integrated Verification & Swarm Audits
+
+ULM includes automated subagent playbooks to verify system health and enforce code standards:
+
+```bash
+# Run all diagnostic checks in parallel
+python scripts/playbooks/swarm_orchestrator.py --all --parallel
+```
+
+Included audits:
+* **Security Auditor (`sec_auditor.py`):** Scans for exposed API keys, unparameterized SQL statements, and `.gitignore` compliance.
+* **Test Harness Engineer (`test_engineer.py`):** Runs the pytest suite, validates SQLite WAL concurrency under load, and enforces prompt token budget ceilings.
+* **Migration Architect (`migration_architect.py`):** Audits database schema integrity, verifies FTS5 virtual table synchronization, and ensures persona schemas remain deduplicated.
+
+---
+
+## Architecture Overview
 
 ```text
-[ Antigravity / Roo-Cline / Gemini Logs ] ──(Stream Parser)──> [ SQLite WAL DB ] ──(Consolidator)──> [ Tier 1-4 Cores ] ──> [ GEMINI.md / .clinerules ]
+[ Transcripts: Antigravity / Cline / Gemini ]
+                     │
+                     ▼
+           (Streaming Parser)
+                     │
+                     ▼
+        [ SQLite WAL Database ]
+   (Facts, Taboo Rules, Schema Profiles)
+                     │
+                     ▼
+        (Compact Prompt Assembler)
+                     │
+                     ▼
+    [ .clinerules / GEMINI.md / Modelfiles ]
 ```
 
-1. **Ingest Phase**: Streams transcript logs from Google Antigravity, Roo-Cline/Cline VSCode tasks, or Gemini web exports with O(1) memory overhead.
-2. **Indexing Phase**: Stores raw session messages, topics, and timestamps into `sync_state.db` using transactional SQLite WAL mode.
-3. **Consolidation Phase**: Fact extractor prunes duplicate facts, handles conflict resolution, and applies "fact aging."
-4. **Assembly Phase**: Dynamic prompt assembler generates hierarchical prompt files (`GEMINI.md`, `.clinerules`, or Ollama `Modelfile`) categorized into Tier 1 (Episodic), Tier 2 (Behavioral Profile), Tier 3 (Facts), and Tier 4 (Workstation Map).
+1. **Ingest:** Streams raw JSONL and markdown transcripts from your coding environments.
+2. **Normalize & Store:** Extracts structured facts, user preferences, and execution failures into `sync_state.db`.
+3. **Prune & Deduplicate:** Merges redundant information and retires stale error taboos.
+4. **Compile:** Generates a deterministic, bounded prompt block that equips the assistant with persistent context without token bloat.
 
 ---
 
-## 🧪 Verification & Testing
+## Project Status & Community Feedback
 
-To ensure code integrity and prevent regressions, you can run the test suite in two ways:
+**Full disclosure:** I am a self-taught developer building tools to solve real problems encountered during daily paired programming. 
 
-### 1. Native Testing
-If you have your virtual environment activated locally:
-```bash
-python -m unittest discover tests
-```
+While this system is actively used on my primary workstation and hardened against daily workflows:
+* The codebase is evolving rapidly as I learn better design patterns.
+* Concurrency handling, async pipelines, and database tuning are ongoing learning areas.
+* Constructive critiques, architectural feedback, and pull requests from experienced developers are genuinely welcome.
 
-### 2. Sterile Container Testing (Docker)
-If you want to run tests in an isolated, clean-room environment to ensure all dependencies are correctly defined (without polluting your local host):
-```bash
-docker run --rm -v "${PWD}:/workspace" -w /workspace python:3.11-slim bash -c "pip install -r requirements.txt && python -m unittest discover tests"
-```
+If you spot something that could be written more cleanly, safely, or efficiently, please feel free to open an **Issue** or submit a **Pull Request**.
 
----
-
-## ⚠️ Fair Warning: I Am Learning As I Go!
-
-Let's be completely honest: **I don't entirely know what the hell I am doing yet.** I only started diving into Python, databases, and Git very recently. This project is my hands-on sandbox for learning how to build local AI data pipelines. Because of that:
-- The code is probably messy, unconventional, or violates some standard Python paradigms.
-- I am figuring out multi-threading, database locks, and API handling on the fly.
-- There are definitely things here that can be optimized, refactored, or completely rewritten.
-
-I am not trying to pretend this is a polished enterprise application—it's a raw, functional tool running on my personal workstation iron that I am actively trying to harden.
-
----
-
-## 🤝 I Genuinely Want Your Help & Critiques!
-
-If you are an experienced developer, a Python wizard, or just someone who likes optimizing data pipelines, **please tear this code apart.** I am incredibly open to constructive criticism, brutal code reviews, and mentorship.
-
-I would love your help, suggestions, or pull requests regarding:
-1. **Code Architecture & Cleanup:** Better ways to structure my classes, handle imports, or separate concerns.
-2. **Dynamic Rate Limiting:** Asynchronous token-bucket rate limiters.
-3. **Database Performance:** SQLite optimization tips under high-concurrency workloads.
-4. **Async Migration:** Moving the entire network/file pipeline from synchronous threads over to a clean async architecture.
-
----
-
-## 🚀 How to Look Around
-
-Because this repository enforces a strict security perimeter via `.gitignore`, private database files (`sync_state.db`), and personal transcripts are completely excluded. 
-
-You are looking at a clean, sterile engine blueprint:
-* `main.py`: The central execution entry point.
-* `core/database.py`: Manages the SQLite schema, migrations, and transactional inserts.
-* `core/consolidator.py`: Resolves memory conflicts, redundant facts, and aging.
-* `core/assembler.py`: Compiles the dynamic system prompt divided into memory hierarchies.
-* `tui/dashboard.py`: Renders the terminal dashboard and controls active sync flows.
-
-### Getting Involved
-
-If you spot a bug, see a line of code that makes you cringe, or have an idea on how to make this better:
-- Open an **Issue** with your feedback or critique.
-- Drop a thought in the **Discussions** tab.
-- Submit a **Pull Request**—I would love to study your code changes!
-
-Thank you for stopping by and helping a self-taught dev build cleaner iron!
+Thanks for exploring the project!

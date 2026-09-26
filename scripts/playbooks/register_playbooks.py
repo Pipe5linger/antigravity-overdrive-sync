@@ -46,6 +46,30 @@ PLAYBOOKS = [
         "action_name": "vacuum_state",
         "target_script_path": "python scripts/playbooks/vacuum_state.py",
         "expected_outcome": "Runs SQLite WAL checkpoint, prunes orphan embeddings, and reclaims disk space."
+    },
+    {
+        "node_id": "pb_sec_auditor",
+        "action_name": "sec_auditor",
+        "target_script_path": "python scripts/playbooks/sec_auditor.py",
+        "expected_outcome": "Audits codebase for secret key leaks, unparameterized SQL queries, and environment security."
+    },
+    {
+        "node_id": "pb_test_engineer",
+        "action_name": "test_engineer",
+        "target_script_path": "python scripts/playbooks/test_engineer.py",
+        "expected_outcome": "Runs pytest regression suite, SQLite WAL concurrency check, and prompt budget validation."
+    },
+    {
+        "node_id": "pb_migration_architect",
+        "action_name": "migration_architect",
+        "target_script_path": "python scripts/playbooks/migration_architect.py",
+        "expected_outcome": "Audits database schema integrity, FTS5 synchronization, persona schema deduplication, and injector status."
+    },
+    {
+        "node_id": "pb_swarm_audit",
+        "action_name": "swarm_audit",
+        "target_script_path": "python scripts/playbooks/swarm_orchestrator.py --all --parallel",
+        "expected_outcome": "Dispatches concurrent parallel swarm across Security, Test Harness, and Migration Architect roles."
     }
 ]
 

@@ -50,6 +50,13 @@ def inspect(table=None, limit=5, show_schema=False):
         return
 
     # Specific table
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+    valid_tables = {row[0] for row in cursor.fetchall()}
+    if table not in valid_tables:
+        print(f"[-] Error: Table '{table}' not found in database.")
+        conn.close()
+        return
+
     print(f"=== Table: {table} ===")
     if show_schema:
         print("\n--- Columns ---")
