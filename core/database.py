@@ -2,6 +2,8 @@ import sqlite3
 import datetime
 import hashlib
 import os
+import time
+import random
 import threading
 from pathlib import Path
 
@@ -16,8 +18,8 @@ class ULMDatabase:
         """Returns a thread-local configured connection to the SQLite database."""
         conn = getattr(self._local, "conn", None)
         if conn is None:
-            conn = sqlite3.connect(self.db_path, check_same_thread=False)
-            if "test" not in self.db_path.lower() and self.db_path != ":memory:":
+            conn = sqlite3.connect(self.db_path, check_same_thread=False, timeout=5.0)
+            if self.db_path != ":memory:":
                 conn.execute("PRAGMA journal_mode = WAL;")
             conn.execute("PRAGMA busy_timeout = 5000;")
             conn.execute("PRAGMA foreign_keys = ON;")
@@ -33,6 +35,27 @@ class ULMDatabase:
             except Exception:
                 pass
             self._local.conn = None
+
+    def _run_transaction(self, fn, retries=5, initial_backoff=0.05):
+        """Runs a write transaction on a thread-local connection with exponential backoff on lock contention."""
+        last_err = None
+        for attempt in range(retries):
+            try:
+                local_conn = self.get_connection()
+                res = fn(local_conn)
+                local_conn.commit()
+                return res
+            except sqlite3.OperationalError as oe:
+                last_err = oe
+                err_str = str(oe).lower()
+                if "locked" in err_str or "busy" in err_str:
+                    time.sleep(initial_backoff * (2 ** attempt) + random.uniform(0.01, 0.05))
+                    continue
+                raise
+            except Exception:
+                raise
+        if last_err:
+            raise last_err
 
     def initialize_db(self):
         try:
@@ -519,12 +542,7 @@ class ULMDatabase:
         if conn:
             _execute(conn)
         else:
-            try:
-                with self.get_connection() as local_conn:
-                    _execute(local_conn)
-                    local_conn.commit()
-            except sqlite3.Error as e:
-                print(f"[-] Error upserting session: {e}")
+            self._run_transaction(_execute)
 
     def generate_message_id(self, session_id, role, content, created_at=None):
         if not created_at:
@@ -547,12 +565,7 @@ class ULMDatabase:
         if conn:
             _execute(conn)
         else:
-            try:
-                with self.get_connection() as local_conn:
-                    _execute(local_conn)
-                    local_conn.commit()
-            except sqlite3.Error as e:
-                print(f"[-] Error inserting message: {e}")
+            self._run_transaction(_execute)
 
     def upsert_fact(self, fact, category, confidence, project_tag=None, weight=None, pinned=None, created_at=None, conn=None):
         now = datetime.datetime.now(datetime.timezone.utc).isoformat()
@@ -575,12 +588,7 @@ class ULMDatabase:
         if conn:
             _execute(conn)
         else:
-            try:
-                with self.get_connection() as local_conn:
-                    _execute(local_conn)
-                    local_conn.commit()
-            except sqlite3.Error as e:
-                print(f"[-] Error upserting fact: {e}")
+            self._run_transaction(_execute)
 
     def set_preference(self, key, value, conn=None):
         now = datetime.datetime.now(datetime.timezone.utc).isoformat()
@@ -595,12 +603,7 @@ class ULMDatabase:
         if conn:
             _execute(conn)
         else:
-            try:
-                with self.get_connection() as local_conn:
-                    _execute(local_conn)
-                    local_conn.commit()
-            except sqlite3.Error as e:
-                print(f"[-] Error setting preference: {e}")
+            self._run_transaction(_execute)
 
     def get_preference(self, key, default=None):
         # Allow environment variables to override SQLite preferences dynamically
