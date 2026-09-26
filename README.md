@@ -31,7 +31,19 @@ Most AI coding assistants operate between two frustrating extremes:
 * **Python 3.10+** (Python 3.11 recommended)
 * **Git**
 
-### Installation
+### Single-Command Install (Fastest)
+Install the ULM engine and global `ulm` CLI directly on any machine with Python:
+```bash
+pip install git+https://github.com/Pipe5linger/antigravity-overdrive-sync.git
+```
+Once installed, the `ulm` command is ready to use in your terminal:
+```bash
+ulm sync
+```
+
+---
+
+### Developer Setup (Clone & Edit)
 ```bash
 # 1. Clone the repository
 git clone https://github.com/Pipe5linger/antigravity-overdrive-sync.git
@@ -45,8 +57,8 @@ python -m venv venv
 # On macOS / Linux:
 source venv/bin/activate
 
-# 3. Install dependencies
-pip install -r requirements.txt
+# 3. Install dependencies (editable mode)
+pip install -e .
 ```
 
 ### Configuration (Optional)
