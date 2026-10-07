@@ -178,9 +178,9 @@ class MemoryConsolidator:
                     return result
                 # 404 from this endpoint — try next one
             except requests.exceptions.ConnectionError:
-                print("[!] MemoryConsolidator: Ollama connection refused — attempting to wake service and retry...")
+                print("[!] MemoryConsolidator: Ollama connection refused — attempting to wake service and retry...", file=sys.stderr)
                 if self._ensure_ollama_ready(ollama_endpoint):
-                    print("[*] MemoryConsolidator: Retrying embedding after warm-up...")
+                    print("[*] MemoryConsolidator: Retrying embedding after warm-up...", file=sys.stderr)
                     time.sleep(5)
                     try:
                         result = self._try_embed_endpoint(url, payload, use_v1)
@@ -189,16 +189,16 @@ class MemoryConsolidator:
                     except requests.exceptions.ConnectionError:
                         pass  # fall through to next endpoint
                     except Exception as e:
-                        print(f"[-] MemoryConsolidator: Embedding retry failed: {e}")
+                        print(f"[-] MemoryConsolidator: Embedding retry failed: {e}", file=sys.stderr)
                 else:
-                    print("[-] MemoryConsolidator: Could not start Ollama. Skipping embedding generation.")
+                    print("[-] MemoryConsolidator: Could not start Ollama. Skipping embedding generation.", file=sys.stderr)
                     return []
             except Exception as e:
-                print(f"[-] MemoryConsolidator: Embedding generation failed: {e}")
+                print(f"[-] MemoryConsolidator: Embedding generation failed: {e}", file=sys.stderr)
                 return []
 
         # All endpoints exhausted
-        print("[-] MemoryConsolidator: All embedding endpoints failed. Skipping embedding generation.")
+        print("[-] MemoryConsolidator: All embedding endpoints failed. Skipping embedding generation.", file=sys.stderr)
         return []
 
     def _cosine_similarity(self, v1: List[float], v2: List[float]) -> float:

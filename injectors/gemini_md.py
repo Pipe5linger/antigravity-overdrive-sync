@@ -2,7 +2,7 @@
 """
 Antigravity Overdrive :: Gemini MD Injector
 Injects master persona identity and memory structures into the SINGLE SOVEREIGN
-master protocol file: ~/.gemini/GEMINI.md (Global machine-wide user rule).
+master protocol file: D:\AI\GEMINI.md (Global user rule — discovered by Antigravity).
 
 Actively purges duplicate/stale GEMINI.md and AGENTS.md files across workspace
 directories to prevent duplicate rule loading and context token bloat.
@@ -18,27 +18,29 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from core.assembler import DynamicPromptAssembler
 from core.utils import atomic_write
 from injectors.base import BaseInjector
-from injectors.google_docs import GoogleDocsInjector
 
 
 class GeminiMdInjector(BaseInjector):
     def __init__(self, llm_model=None, vector_model=None, workspace_root: Path = None):
         super().__init__()
         self.workspace_root = Path(workspace_root) if workspace_root else PROJECT_ROOT
-        
+
         # The SINGLE Sovereign Master Protocol Target:
-        # ~/.gemini/GEMINI.md is automatically discovered by Antigravity as the global user rule (user_global).
-        # Writing to multiple project or parent directories duplicates the 22KB protocol into the context window.
-        home_dir = Path.home()
-        self.master_protocol_file = home_dir / ".gemini" / "GEMINI.md"
+        # D:\AI\GEMINI.md is automatically discovered by Antigravity as the global user rule (user_global).
+        # Writing to multiple project or parent directories duplicates the protocol into the context window.
+        # FIXED: Was Path(r"D:GEMINI.md") — missing backslash caused resolution to CWD, not D:\ root.
+        self.master_protocol_file = Path(r"D:\AI\GEMINI.md")
         self.target_files = [self.master_protocol_file]
-        
-        # Obsolete duplicate files that must be purged to prevent multi-rule loading in Antigravity UI
+
+        home_dir = Path.home()
+        # Obsolete duplicate files that must be purged to prevent multi-rule loading in Antigravity UI.
+        # NOTE: self.workspace_root / "GEMINI.md" is intentionally EXCLUDED from this purge list.
+        # D:\AI\Projects\antigravity-overdrive-sync\GEMINI.md is the live workspace rule loaded by
+        # Antigravity IDE and must never be deleted by this injector.
         self.duplicate_files_to_purge = [
             home_dir / ".gemini" / "config" / "AGENTS.md",
-            Path(r"D:\AI\GEMINI.md"),
+            home_dir / ".gemini" / "GEMINI.md",
             Path(r"D:\AI\Projects\GEMINI.md"),
-            self.workspace_root / "GEMINI.md",
             Path(r"D:\AI\Projects\ComfyUI\GEMINI.md"),
             Path(r"D:\AI\Projects\ZIT_LoRA_Trainer\GEMINI.md"),
         ]
@@ -61,7 +63,7 @@ class GeminiMdInjector(BaseInjector):
     def inject(self, db=None, dry_run=False, project_tag=None) -> bool:
         """Generates the master persona payload and syncs it to the single master target."""
         header_banner = "# VESPERA CALIGO MASTER SYSTEM PROTOCOL\n" + "=" * 80 + "\n"
-        
+
         # Always use the lean assembled identity header to preserve the <5KB protocol size
         payload = self.assembler.build_identity_header(purge_mirrors=True)
         updated_content = f"{header_banner}{payload}"

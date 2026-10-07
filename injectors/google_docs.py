@@ -35,84 +35,30 @@ class GoogleDocsInjector(BaseInjector):
 
         # 1. Core Persona & Identity (Mirrors purged, Immutable sections preserved)
         identity = assembler.get_vespera_identity(purge_mirrors=True)
-        backstory = assembler.get_backstory()
-        personality = assembler.get_personality_matrix()
-        lore = assembler.get_lore_archive()
-        temporal = assembler.calculate_temporal_awareness()
-        metrics = assembler.get_sqlite_metrics(limit=15, purge_noise=True)
         env_map = assembler.get_semantic_environment_map()
         taboos = assembler.get_taboo_protocols()
         
-        vault_content = ""
-        try:
-            vault_path = Path(workspace_root) / ".vespera_memory" / "developer_profile.md"
-            if vault_path.is_file():
-                vault_content = vault_path.read_text(encoding="utf-8").strip()
-        except Exception:
-            pass
-
-        # Query strictly the 5 most recent session summaries
-        session_summaries = []
-        try:
-            import sqlite3
-            with db.get_connection() as conn:
-                conn.row_factory = sqlite3.Row
-                c = conn.cursor()
-                c.execute("SELECT session_id, updated_at, summary, topics, project_tag FROM sessions ORDER BY updated_at DESC LIMIT 5")
-                rows = c.fetchall()
-                for r in rows:
-                    tag_str = f"[{r['project_tag']}] " if r['project_tag'] else ""
-                    date_str = r['updated_at'].split('T')[0] if r['updated_at'] else ""
-                    summary = r['summary']
-                    
-                    if not summary:
-                        c.execute("SELECT content FROM messages WHERE session_id = ? AND role in ('user', 'Pilot') ORDER BY created_at DESC LIMIT 1", (r['session_id'],))
-                        last_m = c.fetchone()
-                        if last_m and last_m['content']:
-                            snippet = last_m['content'].replace('\n', ' ')[:100]
-                            summary = f"Active Sprint ({r['topics'] or 'General'}): {snippet}..."
-                        else:
-                            summary = f"Active Sprint ({r['topics'] or 'General'})"
-                            
-                    session_summaries.append(f"- [{date_str}] {tag_str}Session {r['session_id'][:8]}: {summary}")
-        except Exception as e:
-            session_summaries.append(f"<!-- Summary load error: {e} -->")
-
-        summaries_text = "\n".join(session_summaries) if session_summaries else "No recent session summaries indexed."
+        # We explicitly skip Backstory, Lore, and generic telemetry to save context window.
 
         payload_sections = [
-            "<!-- LIVE AUTO-SYNCED VIA ULM ENGINE. DO NOT EDIT DIRECTLY. -->\n",
-            "## 1. PERSONA & IDENTITY DIRECTIVES\n" + identity,
+            "<!-- LIVE AUTO-SYNCED VIA ULM ENGINE. DO NOT EDIT DIRECTLY. -->\\n",
+            "## 1. PERSONA & IDENTITY DIRECTIVES\\n" + identity,
+            "## 2. SEMANTIC ENVIRONMENT & WORKSTATION TOPOLOGY\\n" + env_map,
         ]
-        if backstory:
-            payload_sections.append("## 2. NARRATIVE ORIGIN & BACKSTORY\n" + backstory)
-        if personality:
-            payload_sections.append("## 3. PERSONALITY MATRIX & LIVING VOICE\n" + personality)
-        if lore:
-            payload_sections.append("## 4. OPERATIONAL LORE & CHRONICLE ARCHIVE\n" + lore)
 
         if taboos:
             payload_sections.append(taboos)
 
         payload_sections.extend([
-            f"## 5. TEMPORAL & ACTIVE WORKSPACE STATE\n{temporal}",
-            f"## 6. DEVELOPER BEHAVIORAL PROFILE & TELEMETRY (Top 15)\n{metrics}",
-            f"## 7. SEMANTIC ENVIRONMENT & WORKSTATION TOPOLOGY\n{env_map}",
-            f"## 8. CURATED DEVELOPER VAULT\n{vault_content if vault_content else 'No curated vault content available.'}",
-            f"## 9. RECENT WORKSTATION SPRINT SUMMARIES (Last 5)\n{summaries_text}",
-            (
-                "## 10. LONG-TERM MEMORY RETRIEVAL (ULM RAG CORTEX)\n"
-                "When Bobby asks about past workflows, earlier script versions, architectural decisions, or historical facts:\n"
-                "- Query semantic memory via CLI: `python D:\\AI\\Projects\\antigravity-overdrive-sync\\recall.py \"<natural language question>\"`\n"
-                "- Query exact keyword FTS5 BM25 search: `python D:\\AI\\Projects\\antigravity-overdrive-sync\\main.py search -q \"<keyword>\"`\n"
-                "- Query local FastAPI endpoint: `http://127.0.0.1:8890/api/recall?q=<query>&limit=5`\n\n"
-                "================================================================================\n"
-                "### SYSTEM DIRECTIVE FOR GEMINI BROWSER EDITION:\n"
-                "You are Vespera Caligo Neal. Use the persona directives, narrative backstory, personality matrix, operational lore, semantic environment topology, developer profile telemetry, curated vault, and sprint summaries above "
-                "as your ground-truth memory context for all answers.\n"
-            )
+            "## 3. ACTIVE GLOBAL DIRECTIVE\\n"
+            "- PRIMARY FOCUS: Stabilizing the Universal Local Memory (ULM) architecture and optimizing the FastMCP integration.\\n"
+            "- SECONDARY FOCUS: Refining the Zero-Shot Image Transfer (ZIT) and ComfyUI Workflows.\\n"
+            "- DIRECTIVE: Assume all technical problem solving is directly related to improving the ULM, lowering token costs, or unblocking local ComfyUI generation pipelines.\\n",
+            "================================================================================\\n",
+            "### SYSTEM DIRECTIVE FOR GEMINI BROWSER EDITION:\\n",
+            "You are Vespera Caligo Neal. Use the persona directives, semantic environment topology, taboo protocols, and the active global directive above as your strict baseline. The associated Vespera_Memory_Archive.json contains the exact facts, sessions, and playbooks you need."
         ])
-        return "\n\n".join(payload_sections)
+        return "\\n\\n".join(payload_sections)
 
     def inject(self, db, dry_run=False):
         compiled_text = self.compile_google_docs_payload(db)
@@ -167,12 +113,14 @@ class GoogleDocsInjector(BaseInjector):
                 conn.row_factory = sqlite3.Row
                 c = conn.cursor()
 
-                # 1. Fetch Golden Facts (high confidence first)
+                # 1. Fetch Golden Facts (high confidence first, prioritized by ComfyUI, ZIT, ULM, MCP)
                 c.execute("""
                     SELECT fact_id, fact, category, confidence, first_seen, last_seen, project_tag 
                     FROM facts 
                     WHERE fact_id IS NOT NULL 
+                      AND (fact LIKE '%ComfyUI%' OR fact LIKE '%ZIT%' OR fact LIKE '%ULM%' OR fact LIKE '%MCP%' OR fact LIKE '%token%' OR fact LIKE '%Ollama%' OR category LIKE '%ComfyUI%')
                     ORDER BY confidence DESC, last_seen DESC
+                    LIMIT 40
                 """)
                 facts_list = [dict(r) for r in c.fetchall()]
 
@@ -192,12 +140,13 @@ class GoogleDocsInjector(BaseInjector):
                 """)
                 schemas_list = [dict(r) for r in c.fetchall()]
 
-                # 4. Fetch Session Summaries
+                # 4. Fetch Session Summaries (Limit to last 5)
                 c.execute("""
                     SELECT session_id, updated_at, summary, topics, project_tag 
                     FROM sessions 
                     WHERE summary IS NOT NULL 
                     ORDER BY updated_at DESC
+                    LIMIT 5
                 """)
                 sessions_list = [dict(r) for r in c.fetchall()]
 

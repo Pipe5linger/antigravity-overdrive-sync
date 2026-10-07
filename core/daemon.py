@@ -91,6 +91,14 @@ class ULMDaemon:
         except Exception as e:
             print(f"[-] Daemon: Rule injection failed: {e}")
 
+        try:
+            from scripts.toolkit.harvest_scratch_vault import harvest_scratch_scripts
+            res = harvest_scratch_scripts(verbose=False)
+            if res.get("inserted", 0) > 0:
+                print(f"[+] Daemon: Vaulted {res['inserted']} new scratch script(s) into Script Vault.")
+        except Exception as e:
+            print(f"[-] Daemon: Script Vault harvest failed: {e}")
+
     async def _worker(self):
         """Background worker that processes high-signal sessions one at a time."""
         print("[*] Daemon: Background LLM worker active.")

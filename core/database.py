@@ -406,6 +406,53 @@ class ULMDatabase:
                     except Exception as e:
                         print(f"[-] Warning creating v12 schema (Graveyard Miner): {e}")
 
+                if current_version < 13:
+                    # Phase 8: Autonomous Script Vault & Scratch Code Recall
+                    try:
+                        c.execute("""
+                            CREATE TABLE IF NOT EXISTS script_vault (
+                                script_id TEXT PRIMARY KEY,
+                                script_name TEXT,
+                                category TEXT,
+                                docstring_summary TEXT,
+                                code_content TEXT,
+                                sha256_hash TEXT UNIQUE,
+                                source_session TEXT,
+                                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                                execution_count INTEGER DEFAULT 1
+                            );
+                        """)
+                        c.execute("""
+                            CREATE VIRTUAL TABLE IF NOT EXISTS script_vault_fts USING fts5(
+                                script_id UNINDEXED,
+                                script_name,
+                                category,
+                                docstring_summary,
+                                code_content
+                            );
+                        """)
+                        c.execute("""
+                            CREATE TRIGGER IF NOT EXISTS trg_script_vault_ai AFTER INSERT ON script_vault BEGIN
+                                INSERT INTO script_vault_fts(script_id, script_name, category, docstring_summary, code_content)
+                                VALUES (new.script_id, new.script_name, new.category, new.docstring_summary, new.code_content);
+                            END;
+                        """)
+                        c.execute("""
+                            CREATE TRIGGER IF NOT EXISTS trg_script_vault_ad AFTER DELETE ON script_vault BEGIN
+                                DELETE FROM script_vault_fts WHERE script_id = old.script_id;
+                            END;
+                        """)
+                        c.execute("""
+                            CREATE TRIGGER IF NOT EXISTS trg_script_vault_au AFTER UPDATE ON script_vault BEGIN
+                                DELETE FROM script_vault_fts WHERE script_id = old.script_id;
+                                INSERT INTO script_vault_fts(script_id, script_name, category, docstring_summary, code_content)
+                                VALUES (new.script_id, new.script_name, new.category, new.docstring_summary, new.code_content);
+                            END;
+                        """)
+                        c.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (13)")
+                    except Exception as e:
+                        print(f"[-] Warning creating v13 schema (Script Vault): {e}")
+
                 # Always ensure profiled_at column exists (safe migration)
                 try:
                     c.execute("ALTER TABLE sessions ADD COLUMN profiled_at TEXT;")
@@ -1072,4 +1119,113 @@ class ULMDatabase:
         except sqlite3.Error as e:
             print(f"[-] Error deduplicating persona schemas: {e}")
             return 0
+
+    # =========================================================================
+    # Script Vault & Scratch Code Recall
+    # =========================================================================
+
+    def upsert_script(self, script_name: str, code_content: str, docstring_summary: str = "", category: str = "utility", source_session: str = "") -> dict:
+        """
+        Inserts or increments usage of a scratch script by SHA-256 hash.
+        Returns dict with status ('inserted' or 'incremented') and script_id.
+        """
+        import hashlib
+        import uuid
+        norm_code = code_content.strip()
+        if not norm_code:
+            return {"status": "error", "error": "empty_code"}
+
+        sha = hashlib.sha256(norm_code.encode("utf-8")).hexdigest()
+        
+        try:
+            with self.get_connection() as conn:
+                c = conn.cursor()
+                c.execute("SELECT script_id, execution_count FROM script_vault WHERE sha256_hash = ?", (sha,))
+                existing = c.fetchone()
+                if existing:
+                    s_id = existing[0]
+                    c.execute("UPDATE script_vault SET execution_count = execution_count + 1 WHERE script_id = ?", (s_id,))
+                    conn.commit()
+                    return {"status": "incremented", "script_id": s_id}
+                else:
+                    s_id = f"scr_{uuid.uuid4().hex[:12]}"
+                    c.execute("""
+                        INSERT INTO script_vault (script_id, script_name, category, docstring_summary, code_content, sha256_hash, source_session, created_at, execution_count)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'), 1)
+                    """, (s_id, script_name, category, docstring_summary, code_content, sha, source_session))
+                    conn.commit()
+                    return {"status": "inserted", "script_id": s_id}
+        except sqlite3.Error as e:
+            print(f"[-] Error upserting script to vault: {e}")
+            return {"status": "error", "error": str(e)}
+
+    def search_scripts(self, query: str, limit: int = 5, category: str = "") -> list:
+        """Searches the Script Vault using FTS5 BM25 or LIKE fallback."""
+        try:
+            with self.get_connection() as conn:
+                conn.row_factory = sqlite3.Row
+                c = conn.cursor()
+                
+                # FTS5 search
+                try:
+                    clean_q = "".join([ch if ch.isalnum() or ch.isspace() else " " for ch in query]).strip()
+                    words = [w for w in clean_q.split() if w]
+                    if words:
+                        fts_query = " OR ".join([f"{w}*" for w in words])
+                        if category:
+                            c.execute("""
+                                SELECT v.script_id, v.script_name, v.category, v.docstring_summary, v.code_content, v.execution_count, v.source_session, v.created_at
+                                FROM script_vault_fts f
+                                JOIN script_vault v ON f.script_id = v.script_id
+                                WHERE script_vault_fts MATCH ? AND v.category = ?
+                                ORDER BY bm25(script_vault_fts) ASC, v.execution_count DESC LIMIT ?
+                            """, (fts_query, category, limit))
+                        else:
+                            c.execute("""
+                                SELECT v.script_id, v.script_name, v.category, v.docstring_summary, v.code_content, v.execution_count, v.source_session, v.created_at
+                                FROM script_vault_fts f
+                                JOIN script_vault v ON f.script_id = v.script_id
+                                WHERE script_vault_fts MATCH ?
+                                ORDER BY bm25(script_vault_fts) ASC, v.execution_count DESC LIMIT ?
+                            """, (fts_query, limit))
+                        rows = c.fetchall()
+                        if rows:
+                            return [dict(r) for r in rows]
+                except sqlite3.OperationalError:
+                    pass
+
+                # Fallback to standard LIKE
+                like_term = f"%{query}%"
+                if category:
+                    c.execute("""
+                        SELECT script_id, script_name, category, docstring_summary, code_content, execution_count, source_session, created_at
+                        FROM script_vault
+                        WHERE (script_name LIKE ? OR docstring_summary LIKE ? OR code_content LIKE ?) AND category = ?
+                        ORDER BY execution_count DESC LIMIT ?
+                    """, (like_term, like_term, like_term, category, limit))
+                else:
+                    c.execute("""
+                        SELECT script_id, script_name, category, docstring_summary, code_content, execution_count, source_session, created_at
+                        FROM script_vault
+                        WHERE script_name LIKE ? OR docstring_summary LIKE ? OR code_content LIKE ?
+                        ORDER BY execution_count DESC LIMIT ?
+                    """, (like_term, like_term, like_term, limit))
+                return [dict(r) for r in c.fetchall()]
+        except sqlite3.Error as e:
+            print(f"[-] Error searching script vault: {e}")
+            return []
+
+    def get_script(self, script_id: str) -> dict | None:
+        """Retrieves a single script from the vault by script_id."""
+        try:
+            with self.get_connection() as conn:
+                conn.row_factory = sqlite3.Row
+                c = conn.cursor()
+                c.execute("SELECT * FROM script_vault WHERE script_id = ?", (script_id,))
+                row = c.fetchone()
+                return dict(row) if row else None
+        except sqlite3.Error as e:
+            print(f"[-] Error fetching script: {e}")
+            return None
+
 

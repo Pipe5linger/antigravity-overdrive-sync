@@ -60,17 +60,19 @@ def ulm_recall(query: str, limit: int = 5, project_tag: str = "") -> str:
     try:
         from core.consolidator import MemoryConsolidator
         mc = MemoryConsolidator(db)
-        query_vector = mc._get_embedding(query)
-        if query_vector:
-            # Query semantic recall with a permissive threshold for hybrid retrieval
-            semantic_matches = db.semantic_recall(query_vector=query_vector, limit=limit, min_similarity=0.35)
-            for m in semantic_matches:
-                if project_tag and m.get("project_tag") and m.get("project_tag") != project_tag:
-                    continue
-                tag = f" [{m['project_tag']}]" if m.get("project_tag") else ""
-                sim_pct = int(m.get("similarity", 0) * 100)
-                results.append(f"- **Semantic Fact**{tag} ({m['category']}, {sim_pct}% match): {m['fact']}")
-                seen_facts.add(m['fact'].strip().lower())
+        ollama_endpoint = db.get_preference("ollama_endpoint", "http://localhost:11434")
+        if mc._is_ollama_running(ollama_endpoint):
+            query_vector = mc._get_embedding(query)
+            if query_vector:
+                # Query semantic recall with a permissive threshold for hybrid retrieval
+                semantic_matches = db.semantic_recall(query_vector=query_vector, limit=limit, min_similarity=0.35)
+                for m in semantic_matches:
+                    if project_tag and m.get("project_tag") and m.get("project_tag") != project_tag:
+                        continue
+                    tag = f" [{m['project_tag']}]" if m.get("project_tag") else ""
+                    sim_pct = int(m.get("similarity", 0) * 100)
+                    results.append(f"- **Semantic Fact**{tag} ({m['category']}, {sim_pct}% match): {m['fact']}")
+                    seen_facts.add(m['fact'].strip().lower())
     except Exception as e:
         # Graceful degradation to FTS5 if Ollama vector embedding is unavailable
         pass
@@ -192,12 +194,14 @@ def ulm_pin_fact(fact: str, category: str = "Technical", project_tag: str = "") 
             from core.consolidator import MemoryConsolidator
             import numpy as np
             mc = MemoryConsolidator(db)
-            emb = mc._get_embedding(fact)
-            if emb:
-                blob = np.array(emb, dtype=np.float32).tobytes()
-                with db.get_connection() as conn:
-                    conn.execute("INSERT OR REPLACE INTO fact_embeddings (fact_id, embedding, model_id, created_at) VALUES (?, ?, ?, ?)", (fact_id, blob, "all-minilm", now_str))
-                    conn.commit()
+            ollama_endpoint = db.get_preference("ollama_endpoint", "http://localhost:11434")
+            if mc._is_ollama_running(ollama_endpoint):
+                emb = mc._get_embedding(fact)
+                if emb:
+                    blob = np.array(emb, dtype=np.float32).tobytes()
+                    with db.get_connection() as conn:
+                        conn.execute("INSERT OR REPLACE INTO fact_embeddings (fact_id, embedding, model_id, created_at) VALUES (?, ?, ?, ?)", (fact_id, blob, "all-minilm", now_str))
+                        conn.commit()
         except Exception:
             pass
 
@@ -242,6 +246,34 @@ def ulm_get_playbook(action_name: str) -> str:
         return f"No procedural playbooks found matching '{action_name}'. Check procedures table in sync_state.db."
 
     return "### 📋 Procedural Playbooks Available:\n\n" + "\n\n".join(results)
+
+@mcp.tool()
+def ulm_recall_script(query: str, limit: int = 3, category: str = "", include_code: bool = True) -> str:
+    """Recalls verified, previously generated scratch scripts and utilities from the ULM Script Vault
+    to eliminate token waste and prevent rewriting throwaway Python scripts.
+
+    Args:
+        query: Semantic or keyword search query (e.g. 'inspect table columns', 'check vram', 'parse transcripts').
+        limit: Maximum number of scripts to return (default 3).
+        category: Optional category filter ('database', 'vram_gpu', 'comfyui', 'telemetry_logs', 'benchmark', 'utility').
+        include_code: Whether to include the full runnable code content in the output (default True).
+    """
+    db = get_db()
+    matches = db.search_scripts(query=query, limit=limit, category=category)
+    if not matches:
+        return f"No scripts found in vault matching '{query}'. Try a broader query or check ulm_get_playbook."
+
+    blocks = []
+    for m in matches:
+        hdr = f"#### 🛠️ `{m['script_name']}` (Category: `{m['category']}` | ID: `{m['script_id']}` | Uses: {m['execution_count']})"
+        desc = f"**Summary**: {m['docstring_summary']}"
+        if include_code and m.get("code_content"):
+            code = f"```python\n{m['code_content']}\n```"
+            blocks.append(f"{hdr}\n{desc}\n\n{code}")
+        else:
+            blocks.append(f"{hdr}\n{desc}")
+
+    return f"### 📦 ULM Script Vault ({len(matches)} Matches for '{query}'):\n\n" + "\n\n---\n\n".join(blocks)
 
 @mcp.tool()
 def ulm_check_taboo(command: str) -> str:
@@ -498,5 +530,20 @@ def ulm_vacuum_db() -> str:
         return f"[-] Vacuum error: {e}"
 
 if __name__ == "__main__":
-    # Launch stdio transport for native Antigravity MCP integration
-    mcp.run(transport="stdio")
+    # Shield stdout from dirty prints/logs in any imported modules
+    real_stdout_buffer = sys.stdout.buffer
+    sys.stdout = sys.stderr
+
+    import anyio
+    from io import TextIOWrapper
+    from mcp.server.stdio import stdio_server
+
+    async def _run_clean_stdio():
+        async with stdio_server(stdout=anyio.wrap_file(TextIOWrapper(real_stdout_buffer, encoding="utf-8", write_through=True))) as (read_stream, write_stream):
+            await mcp._mcp_server.run(
+                read_stream,
+                write_stream,
+                mcp._mcp_server.create_initialization_options(),
+            )
+
+    anyio.run(_run_clean_stdio)

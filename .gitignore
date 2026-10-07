@@ -43,6 +43,10 @@ scratch/
 *.egg-info/
 build/
 dist/
+*.mp4
+*.mkv
+*.avi
+*.mov
 
 # Local System Memory / Drive Logs
 D:/Memory/
@@ -63,4 +67,5 @@ zit_isolated_benchmark.json
 scripts/generators_and_tools/seed_vespera_lore.py
 HANDOFF*.md
 *.local.md
+rules/jeselnik_heuristics.md
 
