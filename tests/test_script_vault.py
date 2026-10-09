@@ -89,3 +89,31 @@ class LedgerAuditor:
     assert "Classes: LedgerAuditor" in summary
     assert "Functions: audit_wal" in summary
     assert category == "database"
+
+def test_sanitize_and_classify_recipe(temp_db):
+    from scripts.toolkit.harvest_scratch_vault import sanitize_and_classify_script
+    
+    # 1. Global script
+    global_code = "import torch\nprint('VRAM free:', torch.cuda.is_available())"
+    code_g, summary_g, cat_g, scope_g = sanitize_and_classify_script(global_code, "gpu_check.py")
+    assert scope_g == "GLOBAL"
+    assert "sys.argv" not in code_g
+
+    # 2. Recipe script with hardcoded session path
+    recipe_code = 'target = r"C:\\Users\\boben\\.gemini\\antigravity\\brain\\206635a9-dc5b-4e12-a078-4e4a895eba9b\\logs\\transcript.jsonl"\nwith open(target): pass'
+    code_r, summary_r, cat_r, scope_r = sanitize_and_classify_script(recipe_code, "parse_target.py")
+    assert scope_r == "RECIPE"
+    assert "sys.argv[1]" in code_r
+
+    # Insert both and search by scope
+    temp_db.upsert_script("gpu_check.py", code_g, summary_g, cat_g, scope=scope_g)
+    temp_db.upsert_script("parse_target.py", code_r, summary_r, cat_r, scope=scope_r)
+
+    globals_found = temp_db.search_scripts("VRAM", scope="GLOBAL")
+    assert len(globals_found) >= 1
+    assert globals_found[0]["scope"] == "GLOBAL"
+
+    recipes_found = temp_db.search_scripts("transcript", scope="RECIPE")
+    assert len(recipes_found) >= 1
+    assert recipes_found[0]["scope"] == "RECIPE"
+

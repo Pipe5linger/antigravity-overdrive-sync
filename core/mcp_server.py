@@ -248,7 +248,7 @@ def ulm_get_playbook(action_name: str) -> str:
     return "### 📋 Procedural Playbooks Available:\n\n" + "\n\n".join(results)
 
 @mcp.tool()
-def ulm_recall_script(query: str, limit: int = 3, category: str = "", include_code: bool = True) -> str:
+def ulm_recall_script(query: str, limit: int = 3, category: str = "", scope: str = "", include_code: bool = True) -> str:
     """Recalls verified, previously generated scratch scripts and utilities from the ULM Script Vault
     to eliminate token waste and prevent rewriting throwaway Python scripts.
 
@@ -256,17 +256,21 @@ def ulm_recall_script(query: str, limit: int = 3, category: str = "", include_co
         query: Semantic or keyword search query (e.g. 'inspect table columns', 'check vram', 'parse transcripts').
         limit: Maximum number of scripts to return (default 3).
         category: Optional category filter ('database', 'vram_gpu', 'comfyui', 'telemetry_logs', 'benchmark', 'utility').
+        scope: Optional scope filter ('GLOBAL' for workstation tools, 'RECIPE' for target-bound blueprints).
         include_code: Whether to include the full runnable code content in the output (default True).
     """
     db = get_db()
-    matches = db.search_scripts(query=query, limit=limit, category=category)
+    matches = db.search_scripts(query=query, limit=limit, category=category, scope=scope)
     if not matches:
         return f"No scripts found in vault matching '{query}'. Try a broader query or check ulm_get_playbook."
 
     blocks = []
     for m in matches:
-        hdr = f"#### 🛠️ `{m['script_name']}` (Category: `{m['category']}` | ID: `{m['script_id']}` | Uses: {m['execution_count']})"
+        scope_val = m.get('scope', 'GLOBAL') or 'GLOBAL'
+        hdr = f"#### 🛠️ `{m['script_name']}` [{scope_val}] (Category: `{m['category']}` | ID: `{m['script_id']}` | Uses: {m['execution_count']})"
         desc = f"**Summary**: {m['docstring_summary']}"
+        if scope_val == "RECIPE":
+            desc += "\n> [!TIP] Parameterized Recipe: Accepts target file/directory as `sys.argv[1]`."
         if include_code and m.get("code_content"):
             code = f"```python\n{m['code_content']}\n```"
             blocks.append(f"{hdr}\n{desc}\n\n{code}")

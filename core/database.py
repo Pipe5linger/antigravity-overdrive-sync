@@ -453,6 +453,12 @@ class ULMDatabase:
                     except Exception as e:
                         print(f"[-] Warning creating v13 schema (Script Vault): {e}")
 
+                # Ensure scope column exists on script_vault (GLOBAL vs RECIPE)
+                try:
+                    c.execute("ALTER TABLE script_vault ADD COLUMN scope TEXT DEFAULT 'GLOBAL';")
+                except sqlite3.OperationalError:
+                    pass
+
                 # Always ensure profiled_at column exists (safe migration)
                 try:
                     c.execute("ALTER TABLE sessions ADD COLUMN profiled_at TEXT;")
@@ -1124,9 +1130,10 @@ class ULMDatabase:
     # Script Vault & Scratch Code Recall
     # =========================================================================
 
-    def upsert_script(self, script_name: str, code_content: str, docstring_summary: str = "", category: str = "utility", source_session: str = "") -> dict:
+    def upsert_script(self, script_name: str, code_content: str, docstring_summary: str = "", category: str = "utility", source_session: str = "", scope: str = "GLOBAL") -> dict:
         """
         Inserts or increments usage of a scratch script by SHA-256 hash.
+        Scope is either 'GLOBAL' (workstation tool) or 'RECIPE' (target/file-bound recipe).
         Returns dict with status ('inserted' or 'incremented') and script_id.
         """
         import hashlib
@@ -1144,23 +1151,23 @@ class ULMDatabase:
                 existing = c.fetchone()
                 if existing:
                     s_id = existing[0]
-                    c.execute("UPDATE script_vault SET execution_count = execution_count + 1 WHERE script_id = ?", (s_id,))
+                    c.execute("UPDATE script_vault SET execution_count = execution_count + 1, scope = ? WHERE script_id = ?", (scope, s_id))
                     conn.commit()
                     return {"status": "incremented", "script_id": s_id}
                 else:
                     s_id = f"scr_{uuid.uuid4().hex[:12]}"
                     c.execute("""
-                        INSERT INTO script_vault (script_id, script_name, category, docstring_summary, code_content, sha256_hash, source_session, created_at, execution_count)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'), 1)
-                    """, (s_id, script_name, category, docstring_summary, code_content, sha, source_session))
+                        INSERT INTO script_vault (script_id, script_name, category, docstring_summary, code_content, sha256_hash, source_session, created_at, execution_count, scope)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'), 1, ?)
+                    """, (s_id, script_name, category, docstring_summary, code_content, sha, source_session, scope))
                     conn.commit()
                     return {"status": "inserted", "script_id": s_id}
         except sqlite3.Error as e:
             print(f"[-] Error upserting script to vault: {e}")
             return {"status": "error", "error": str(e)}
 
-    def search_scripts(self, query: str, limit: int = 5, category: str = "") -> list:
-        """Searches the Script Vault using FTS5 BM25 or LIKE fallback."""
+    def search_scripts(self, query: str, limit: int = 5, category: str = "", scope: str = "") -> list:
+        """Searches the Script Vault using FTS5 BM25 or LIKE fallback with optional scope filtering."""
         try:
             with self.get_connection() as conn:
                 conn.row_factory = sqlite3.Row
@@ -1172,22 +1179,24 @@ class ULMDatabase:
                     words = [w for w in clean_q.split() if w]
                     if words:
                         fts_query = " OR ".join([f"{w}*" for w in words])
+                        conditions = ["script_vault_fts MATCH ?"]
+                        params = [fts_query]
                         if category:
-                            c.execute("""
-                                SELECT v.script_id, v.script_name, v.category, v.docstring_summary, v.code_content, v.execution_count, v.source_session, v.created_at
-                                FROM script_vault_fts f
-                                JOIN script_vault v ON f.script_id = v.script_id
-                                WHERE script_vault_fts MATCH ? AND v.category = ?
-                                ORDER BY bm25(script_vault_fts) ASC, v.execution_count DESC LIMIT ?
-                            """, (fts_query, category, limit))
-                        else:
-                            c.execute("""
-                                SELECT v.script_id, v.script_name, v.category, v.docstring_summary, v.code_content, v.execution_count, v.source_session, v.created_at
-                                FROM script_vault_fts f
-                                JOIN script_vault v ON f.script_id = v.script_id
-                                WHERE script_vault_fts MATCH ?
-                                ORDER BY bm25(script_vault_fts) ASC, v.execution_count DESC LIMIT ?
-                            """, (fts_query, limit))
+                            conditions.append("v.category = ?")
+                            params.append(category)
+                        if scope:
+                            conditions.append("v.scope = ?")
+                            params.append(scope)
+                        params.append(limit)
+                        where_clause = " AND ".join(conditions)
+
+                        c.execute(f"""
+                            SELECT v.script_id, v.script_name, v.category, v.scope, v.docstring_summary, v.code_content, v.execution_count, v.source_session, v.created_at
+                            FROM script_vault_fts f
+                            JOIN script_vault v ON f.script_id = v.script_id
+                            WHERE {where_clause}
+                            ORDER BY bm25(script_vault_fts) ASC, v.execution_count DESC LIMIT ?
+                        """, tuple(params))
                         rows = c.fetchall()
                         if rows:
                             return [dict(r) for r in rows]
@@ -1196,20 +1205,23 @@ class ULMDatabase:
 
                 # Fallback to standard LIKE
                 like_term = f"%{query}%"
+                conditions = ["(script_name LIKE ? OR docstring_summary LIKE ? OR code_content LIKE ?)"]
+                params = [like_term, like_term, like_term]
                 if category:
-                    c.execute("""
-                        SELECT script_id, script_name, category, docstring_summary, code_content, execution_count, source_session, created_at
-                        FROM script_vault
-                        WHERE (script_name LIKE ? OR docstring_summary LIKE ? OR code_content LIKE ?) AND category = ?
-                        ORDER BY execution_count DESC LIMIT ?
-                    """, (like_term, like_term, like_term, category, limit))
-                else:
-                    c.execute("""
-                        SELECT script_id, script_name, category, docstring_summary, code_content, execution_count, source_session, created_at
-                        FROM script_vault
-                        WHERE script_name LIKE ? OR docstring_summary LIKE ? OR code_content LIKE ?
-                        ORDER BY execution_count DESC LIMIT ?
-                    """, (like_term, like_term, like_term, limit))
+                    conditions.append("category = ?")
+                    params.append(category)
+                if scope:
+                    conditions.append("scope = ?")
+                    params.append(scope)
+                params.append(limit)
+                where_clause = " AND ".join(conditions)
+
+                c.execute(f"""
+                    SELECT script_id, script_name, category, scope, docstring_summary, code_content, execution_count, source_session, created_at
+                    FROM script_vault
+                    WHERE {where_clause}
+                    ORDER BY execution_count DESC LIMIT ?
+                """, tuple(params))
                 return [dict(r) for r in c.fetchall()]
         except sqlite3.Error as e:
             print(f"[-] Error searching script vault: {e}")

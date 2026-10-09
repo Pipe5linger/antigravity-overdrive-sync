@@ -2,13 +2,15 @@
 """
 File    : harvest_scratch_vault.py
 Purpose : Sweeps ephemeral scratch directories across all Antigravity agent sessions,
-          extracts AST metadata, docstrings, and signatures, and indexes them into
+          sanitizes hardcoded target bindings into parameterized CLI inputs (sys.argv[1]),
+          classifies scope (GLOBAL vs RECIPE), extracts AST metadata, and indexes them into
           the persistent ULM Script Vault in sync_state.db.
 """
 
 import os
 import sys
 import ast
+import re
 import hashlib
 from pathlib import Path
 from datetime import datetime
@@ -28,6 +30,9 @@ from core.database import ULMDatabase
 
 DEFAULT_BRAIN_DIR = Path(r"C:\Users\boben\.gemini\antigravity\brain")
 DEFAULT_DB_PATH = PROJECT_ROOT / "db" / "sync_state.db"
+
+UUID_REGEX = re.compile(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', re.I)
+TARGET_PATH_REGEX = re.compile(r'r?["\']([a-zA-Z]:[\\/][^"\']*(?:brain|logs|scratch)[\\/][0-9a-f\-]{36}[^"\']*)["\']', re.I)
 
 def extract_script_metadata(code_content: str, filename: str) -> tuple[str, str]:
     """
@@ -100,11 +105,47 @@ def extract_script_metadata(code_content: str, filename: str) -> tuple[str, str]
 
     return summary, category
 
+def sanitize_and_classify_script(code_content: str, filename: str) -> tuple[str, str, str, str]:
+    """
+    Analyzes code content to:
+      1. Classify scope: GLOBAL (pure workstation tool) vs RECIPE (target/file-bound blueprint).
+      2. If RECIPE, auto-parameterizes hardcoded file/session paths with sys.argv[1] fallback.
+      3. Extracts metadata summary and category.
+    Returns:
+      (sanitized_code, summary, category, scope)
+    """
+    has_uuid = bool(UUID_REGEX.search(code_content))
+    has_target = any(k in code_content for k in ["transcript.jsonl", "target_file", "target_path", "source_dirs"])
+    
+    # Scope determination
+    if has_uuid or (has_target and "sync_state.db" not in code_content):
+        scope = "RECIPE"
+    else:
+        scope = "GLOBAL"
+
+    sanitized_code = code_content
+
+    # Auto-parameterization for recipes:
+    if scope == "RECIPE":
+        def _param_replacer(match):
+            orig_path = match.group(1)
+            return f"(sys.argv[1] if len(sys.argv) > 1 else r\"{orig_path}\")"
+
+        new_code, count = TARGET_PATH_REGEX.subn(_param_replacer, code_content)
+        if count > 0:
+            if "import sys" not in new_code:
+                new_code = "import sys\n" + new_code
+            header = f"# [ULM SANITIZED RECIPE] Parameterized {count} hardcoded target path(s).\n# Usage: python {filename} [TARGET_PATH]\n"
+            sanitized_code = header + new_code
+
+    summary, category = extract_script_metadata(sanitized_code, filename)
+    return sanitized_code, summary, category, scope
+
 def harvest_scratch_scripts(brain_dir: Path = DEFAULT_BRAIN_DIR, db_path: Path = DEFAULT_DB_PATH, verbose: bool = True):
     """Sweeps all scratch scripts across all session directories into ULMDatabase."""
     if not brain_dir.exists():
         print(f"[-] Brain directory not found at: {brain_dir}")
-        return {"scanned": 0, "inserted": 0, "incremented": 0}
+        return {"scanned": 0, "inserted": 0, "incremented": 0, "global_count": 0, "recipe_count": 0}
 
     db = ULMDatabase(str(db_path))
     db.initialize_db()
@@ -121,6 +162,8 @@ def harvest_scratch_scripts(brain_dir: Path = DEFAULT_BRAIN_DIR, db_path: Path =
     inserted_count = 0
     incremented_count = 0
     errors_count = 0
+    global_count = 0
+    recipe_count = 0
 
     for py_file in python_files:
         try:
@@ -129,13 +172,19 @@ def harvest_scratch_scripts(brain_dir: Path = DEFAULT_BRAIN_DIR, db_path: Path =
             if not code_content.strip():
                 continue
 
-            summary, category = extract_script_metadata(code_content, py_file.name)
+            sanitized_code, summary, category, scope = sanitize_and_classify_script(code_content, py_file.name)
+            if scope == "GLOBAL":
+                global_count += 1
+            else:
+                recipe_count += 1
+
             res = db.upsert_script(
                 script_name=py_file.name,
-                code_content=code_content,
+                code_content=sanitized_code,
                 docstring_summary=summary,
                 category=category,
-                source_session=session_id
+                source_session=session_id,
+                scope=scope
             )
 
             if res.get("status") == "inserted":
@@ -150,19 +199,23 @@ def harvest_scratch_scripts(brain_dir: Path = DEFAULT_BRAIN_DIR, db_path: Path =
                 print(f"[-] Failed indexing {py_file.name}: {e}")
 
     if verbose:
-        print("\n" + "=" * 55)
-        print("          ULM SCRIPT VAULT HARVEST COMPLETE")
-        print("=" * 55)
-        print(f"  • Files Scanned    : {len(python_files)}")
-        print(f"  • Unique Indexed   : {inserted_count} new scripts")
-        print(f"  • Re-used/Dupes    : {incremented_count} deduplicated")
-        print(f"  • Errors           : {errors_count}")
-        print("=" * 55 + "\n")
+        print("\n" + "=" * 60)
+        print("          ULM SCRIPT VAULT SANITIZER & HARVEST")
+        print("=" * 60)
+        print(f"  • Files Scanned       : {len(python_files)}")
+        print(f"  • GLOBAL Tools        : {global_count} (Standalone Workstation Tools)")
+        print(f"  • RECIPE Blueprints   : {recipe_count} (Parameterized Recipes)")
+        print(f"  • Unique Indexed      : {inserted_count} new scripts")
+        print(f"  • Re-used/Dupes       : {incremented_count} deduplicated & scoped")
+        print(f"  • Errors              : {errors_count}")
+        print("=" * 60 + "\n")
 
     return {
         "scanned": len(python_files),
         "inserted": inserted_count,
         "incremented": incremented_count,
+        "global_count": global_count,
+        "recipe_count": recipe_count,
         "errors": errors_count
     }
 

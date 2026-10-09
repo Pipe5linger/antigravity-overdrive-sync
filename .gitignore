@@ -63,6 +63,7 @@ GEMINI.md
 persona_baseline.yaml
 persona_prompt.md
 vespera_physical_baseline.txt
+vespera_baseline_loader.py
 zit_isolated_benchmark.json
 scripts/generators_and_tools/seed_vespera_lore.py
 HANDOFF*.md
