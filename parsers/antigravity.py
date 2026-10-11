@@ -63,8 +63,10 @@ class AntigravityParser(BaseParser):
                 
             if detected:
                 source_dirs = detected
-            else:
+            elif Path(r"D:\Memory\Unified_Ingest").exists():
                 source_dirs = [r"D:\Memory\Unified_Ingest"]
+            else:
+                source_dirs = [str(user_brain)]
                 
         self.source_dirs = source_dirs if isinstance(source_dirs, list) else [source_dirs]
 
@@ -130,12 +132,16 @@ class AntigravityParser(BaseParser):
                 
                 # Logic: If directory, check for Antigravity or Cline task log structure. If file, treat as direct export.
                 if os.path.isdir(full_path):
-                    antigravity_log = os.path.join(full_path, ".system_generated", "logs", "transcript.jsonl")
+                    antigravity_nested_log = os.path.join(full_path, ".system_generated", "logs", "transcript.jsonl")
+                    antigravity_flat_log = os.path.join(full_path, "transcript.jsonl")
                     cline_ui_log = os.path.join(full_path, "ui_messages.json")
                     cline_api_log = os.path.join(full_path, "api_conversation_history.json")
                     
-                    if os.path.exists(antigravity_log):
-                        transcript_path = antigravity_log
+                    if os.path.exists(antigravity_nested_log):
+                        transcript_path = antigravity_nested_log
+                        adapter = AntigravityNormalizer()
+                    elif os.path.exists(antigravity_flat_log):
+                        transcript_path = antigravity_flat_log
                         adapter = AntigravityNormalizer()
                     elif os.path.exists(cline_ui_log):
                         transcript_path = cline_ui_log

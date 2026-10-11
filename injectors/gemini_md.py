@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""
+r"""
 Antigravity Overdrive :: Gemini MD Injector
 Injects master persona identity and memory structures into the SINGLE SOVEREIGN
-master protocol file: D:\AI\GEMINI.md (Global user rule — discovered by Antigravity).
+master protocol file: D:\AI\GEMINI.md (Global user rule  -  discovered by Antigravity).
 
 Actively purges duplicate/stale GEMINI.md and AGENTS.md files across workspace
 directories to prevent duplicate rule loading and context token bloat.
@@ -27,19 +27,21 @@ class GeminiMdInjector(BaseInjector):
 
         # The SINGLE Sovereign Master Protocol Target:
         # D:\AI\GEMINI.md is automatically discovered by Antigravity as the global user rule (user_global).
-        # Writing to multiple project or parent directories duplicates the protocol into the context window.
-        # FIXED: Was Path(r"D:GEMINI.md") — missing backslash caused resolution to CWD, not D:\ root.
-        self.master_protocol_file = Path(r"D:\AI\GEMINI.md")
+        # Resolve master protocol target dynamically: check environment override first,
+        # fallback to D:\AI\GEMINI.md if present, otherwise write to workspace root.
+        custom_protocol = os.environ.get("ULM_MASTER_PROTOCOL")
+        if custom_protocol:
+            self.master_protocol_file = Path(custom_protocol)
+        elif Path(r"D:\AI").exists():
+            self.master_protocol_file = Path(r"D:\AI\GEMINI.md")
+        else:
+            self.master_protocol_file = self.workspace_root / "GEMINI.md"
         self.target_files = [self.master_protocol_file]
 
         home_dir = Path.home()
-        # Obsolete duplicate files that must be purged to prevent multi-rule loading in Antigravity UI.
-        # NOTE: self.workspace_root / "GEMINI.md" is intentionally EXCLUDED from this purge list.
-        # D:\AI\Projects\antigravity-overdrive-sync\GEMINI.md is the live workspace rule loaded by
-        # Antigravity IDE and must never be deleted by this injector.
+        # Obsolete duplicate files across workspace sub-projects.
+        # Global user configuration rules (~/.gemini/config/AGENTS.md) are protected from deletion.
         self.duplicate_files_to_purge = [
-            home_dir / ".gemini" / "config" / "AGENTS.md",
-            home_dir / ".gemini" / "GEMINI.md",
             Path(r"D:\AI\Projects\GEMINI.md"),
             Path(r"D:\AI\Projects\ComfyUI\GEMINI.md"),
             Path(r"D:\AI\Projects\ZIT_LoRA_Trainer\GEMINI.md"),

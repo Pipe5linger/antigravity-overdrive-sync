@@ -7,15 +7,16 @@ from pathlib import Path
 # Enforce UTF-8 terminal piping on Windows
 if sys.platform.startswith("win"):
     try:
-        sys.stdout.reconfigure(encoding='utf-8', line_buffering=True)
-        sys.stderr.reconfigure(encoding='utf-8', line_buffering=True)
+        sys.stdout.reconfigure(encoding='utf-8', line_buffering=True, errors='replace')
+        sys.stderr.reconfigure(encoding='utf-8', line_buffering=True, errors='replace')
     except AttributeError:
         pass
 
 from core.database import ULMDatabase
 from core.engine import ULMEngine
 
-DEFAULT_DB_PATH = r"D:\AI\Projects\antigravity-overdrive-sync\db\sync_state.db"
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+DEFAULT_DB_PATH = os.environ.get("ULM_DB_PATH", str(PROJECT_ROOT / "db" / "sync_state.db"))
 
 class ProceduralRunner:
     def __init__(self, db_path=None):
