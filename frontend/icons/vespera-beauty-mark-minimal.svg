@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="100%" height="100%" fill="none">
+  <defs>
+    <linearGradient id="minimalGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fb7185"/>
+      <stop offset="50%" stop-color="#e11d48"/>
+      <stop offset="100%" stop-color="#4f46e5"/>
+    </linearGradient>
+  </defs>
+  <!-- Cheekbone sweep contour -->
+  <path d="M12 14C22 10 32 16 36 26" stroke="url(#minimalGrad)" stroke-width="2.5" stroke-linecap="round"/>
+  <!-- Asymmetric smirk upward curve -->
+  <path d="M16 34C22 36 30 36 34 31" stroke="#e11d48" stroke-width="2.8" stroke-linecap="round"/>
+  <!-- Soft lower lip touch -->
+  <path d="M20 38C25 40 29 39 31 36" stroke="#fda4af" stroke-width="1.5" stroke-linecap="round" opacity="0.7"/>
+  <!-- The Signature Beauty Mark (Focal point glow) -->
+  <circle cx="21" cy="25" r="3" fill="#ffffff"/>
+  <circle cx="21" cy="25" r="4.5" stroke="#e11d48" stroke-width="1.2" opacity="0.6"/>
+</svg>

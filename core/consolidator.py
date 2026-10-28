@@ -386,10 +386,18 @@ class MemoryConsolidator:
         try:
             with self.db.get_connection() as conn:
                 c = conn.cursor()
+                now_str = datetime.datetime.now(datetime.timezone.utc).isoformat()
                 if to_delete:
                     for fid in to_delete:
-                        c.execute("DELETE FROM facts WHERE fact_id = ?", (fid,))
-                        deleted_count += 1
+                        # Soft archive into facts_archive first
+                        c.execute("""
+                            INSERT INTO facts_archive (fact_id, fact, category, confidence, project_tag, weight, pinned, reason, archived_at, origin)
+                            SELECT fact_id, fact, category, confidence, project_tag, weight, pinned, 'temporal_decay', ?, origin
+                            FROM facts WHERE fact_id = ? AND (pinned IS NULL OR pinned = 0)
+                        """, (now_str, fid))
+                        c.execute("DELETE FROM facts WHERE fact_id = ? AND (pinned IS NULL OR pinned = 0)", (fid,))
+                        if c.rowcount > 0:
+                            deleted_count += 1
                 
                 if to_update:
                     for weight, fid in to_update:
@@ -398,6 +406,13 @@ class MemoryConsolidator:
                 conn.commit()
         except sqlite3.Error as e:
             print(f"[-] MemoryConsolidator: Temporal pruning transaction failed: {e}", file=sys.stderr)
+
+        # Also prune unreviewed agent_pending facts exceeding TTL (default: 7 days)
+        if hasattr(self.db, "prune_expired_pending_facts"):
+            expired_pending = self.db.prune_expired_pending_facts(ttl_hours=168)
+            if expired_pending > 0:
+                print(f"[+] MemoryConsolidator: Archived {expired_pending} expired pending facts.")
+                deleted_count += expired_pending
 
         if deleted_count > 0 or updated_count > 0:
             print(f"[+] MemoryConsolidator: Pruned {deleted_count} stale facts and updated {updated_count} weights.")
@@ -420,8 +435,8 @@ class MemoryConsolidator:
         ollama_endpoint = self.db.get_preference("ollama_endpoint", "http://localhost:11434")
         gemini_api_key = self.api_key or self.db.get_preference("gemini_api_key")
 
-        # 1. Fetch facts and their embeddings
-        facts = self.db.get_facts(limit=500, project_tag=project_tag)
+        # 1. Fetch facts and their embeddings (strictly exclude pinned and pending facts)
+        facts = self.db.get_facts(limit=500, project_tag=project_tag, exclude_pinned=True, exclude_pending=True)
         if len(facts) < 2:
             return 0, 0
 
@@ -534,28 +549,62 @@ class MemoryConsolidator:
                 
                 result = self._synthesize_cluster(cluster, llm_provider, llm_model, ollama_endpoint, gemini_api_key)
                 if result and "golden_fact" in result:
-                    merged_ids = result.get('merged_ids', [f['fact_id'] for f in cluster])
-                    if not merged_ids or not isinstance(merged_ids, list):
-                        merged_ids = [f['fact_id'] for f in cluster]
+                    # Iron Dome: Strictly intersect LLM-proposed merged_ids with actual cluster member IDs
+                    cluster_unpinned_ids = {f['fact_id'] for f in cluster if not f.get('pinned')}
+                    raw_merged_ids = result.get('merged_ids', list(cluster_unpinned_ids))
+                    if not raw_merged_ids or not isinstance(raw_merged_ids, list):
+                        raw_merged_ids = list(cluster_unpinned_ids)
+                    
+                    # Intersect: Only allow deletion of IDs that belong to THIS cluster AND are NOT pinned
+                    validated_delete_ids = [fid for fid in raw_merged_ids if fid in cluster_unpinned_ids]
+                    
+                    if not validated_delete_ids:
+                        print(f"[*] MemoryConsolidator: No valid unpinned IDs to merge for cluster {i+1}. Skipping.")
+                        continue
+
                     # Apply the Golden Truth
                     try:
                         with self.db.get_connection() as conn:
                             c = conn.cursor()
-                            # Delete merged facts
-                            for fid in merged_ids:
-                                c.execute("DELETE FROM facts WHERE fact_id = ?", (fid,))
-                                total_deleted += 1
+                            now_str = datetime.datetime.now(datetime.timezone.utc).isoformat()
+                            # Soft-archive merged facts before deletion
+                            for fid in validated_delete_ids:
+                                c.execute("""
+                                    INSERT INTO facts_archive (fact_id, fact, category, confidence, project_tag, weight, pinned, reason, archived_at)
+                                    SELECT fact_id, fact, category, confidence, project_tag, weight, pinned, 'consolidator_merge', ?
+                                    FROM facts WHERE fact_id = ? AND (pinned IS NULL OR pinned = 0)
+                                """, (now_str, fid))
+                                c.execute("DELETE FROM facts WHERE fact_id = ? AND (pinned IS NULL OR pinned = 0)", (fid,))
+                                if c.rowcount > 0:
+                                    total_deleted += 1
                             
                             # Preserve project_tag from first merged fact if present
                             cluster_tag = cluster[0].get("project_tag") if cluster else None
                             import hashlib
                             golden_fact_id = hashlib.sha256(result['golden_fact'].strip().lower().encode('utf-8')).hexdigest()[:16]
-                            # Upsert the Golden Fact
-                            c.execute("""
-                                INSERT OR REPLACE INTO facts (fact_id, fact, category, confidence, first_seen, last_seen, project_tag, weight, pinned, created_at)
-                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                            """, (golden_fact_id, result['golden_fact'], result['category'], result['confidence'], 
-                                  datetime.datetime.now().isoformat(), datetime.datetime.now().isoformat(), cluster_tag, 1.0, 0, datetime.datetime.now().isoformat()))
+                            
+                            # Consolidator origin inherits lowest trust of the cluster
+                            cluster_origins = {f.get("origin") or "unverified" for f in cluster}
+                            if "agent_pending" in cluster_origins:
+                                merged_origin = "agent_pending"
+                            elif "unverified" in cluster_origins:
+                                merged_origin = "unverified"
+                            elif "restored" in cluster_origins:
+                                merged_origin = "restored"
+                            else:
+                                merged_origin = "consolidator"
+
+                            # Upsert the Golden Fact via centralized DB method (guaranteeing origin protection)
+                            self.db.upsert_consolidated_fact(
+                                fact_id=golden_fact_id,
+                                fact=result['golden_fact'],
+                                category=result.get('category', 'Consolidated'),
+                                confidence=result.get('confidence', 0.95),
+                                created_at=now_str,
+                                project_tag=cluster_tag,
+                                origin=merged_origin,
+                                conn=conn
+                            )
                             total_upserted += 1
                             conn.commit()
                     except Exception as e:

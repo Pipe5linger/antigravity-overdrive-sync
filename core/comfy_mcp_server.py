@@ -747,6 +747,80 @@ def comfy_pin_golden_recipe(
     except Exception as e:
         return f"[-] Error pinning recipe to ULM: {e}"
 
+@mcp.tool()
+def comfy_log_parameter_tweak(
+    node_id: str,
+    node_title: str,
+    parameter_name: str,
+    old_value: str,
+    new_value: str,
+    rationale: str = "",
+    workflow_name: str = "Amy_Phase1_HyperStudio.json"
+) -> str:
+    """Logs a ComfyUI parameter tweak, slider adjustment, or button action to the persistent creation log and ULM memory.
+
+    Args:
+        node_id: The ID of the node being modified (e.g., '3', '8', '12').
+        node_title: Display title/type of the node (e.g., 'KSampler (Advanced)', 'ZIT Model Loader').
+        parameter_name: The specific slider, widget, or parameter adjusted (e.g., 'cfg', 'steps', 'denoise', 'seed').
+        old_value: The previous setting or baseline value.
+        new_value: The new setting after modification.
+        rationale: Brief explanation of why the change was made (e.g., 'Reduce skin saturation', 'Lock identity framing').
+        workflow_name: The active workflow JSON file name.
+    """
+    import datetime
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    # 1. Format Markdown Entry
+    log_entry = (
+        f"| {timestamp} | Node `{node_id}` ({node_title}) | `{parameter_name}` | "
+        f"`{old_value}` → `{new_value}` | {rationale or 'Manual interactive tuning'} |\n"
+    )
+
+    # 2. Append to Living Creation Log in Workstation Repo
+    workstation_doc = Path(r"D:\AI\Projects\ComfyUI-ZIT-Dataset-Workstation\docs\Living_LoRA_Creation_Log.md")
+    try:
+        if not workstation_doc.exists():
+            workstation_doc.parent.mkdir(parents=True, exist_ok=True)
+            header = (
+                f"# Living LoRA Creation & Workflow Parameter Ledger\n\n"
+                f"**Active Workflow**: `{workflow_name}`\n\n"
+                f"| Timestamp | Node | Parameter | Adjustment | Rationale |\n"
+                f"|:---|:---|:---|:---|:---|\n"
+            )
+            workstation_doc.write_text(header + log_entry, encoding="utf-8")
+        else:
+            with open(workstation_doc, "a", encoding="utf-8") as f:
+                f.write(log_entry)
+        doc_logged = True
+    except Exception as e:
+        doc_logged = False
+        doc_err = str(e)
+
+    # 3. Pin to ULM State DB
+    ulm_fact_id = None
+    try:
+        from core.database import ULMDatabase
+        db_path = Path(__file__).resolve().parent.parent / "db" / "sync_state.db"
+        if db_path.is_file():
+            db = ULMDatabase(str(db_path))
+            fact_payload = (
+                f"COMFY_PARAMETER_TWEAK [{workflow_name}]: Node {node_id} ({node_title}) - "
+                f"{parameter_name}: {old_value} -> {new_value}. Rationale: {rationale}"
+            )
+            ulm_fact_id = db.add_fact(fact_payload, category="workflow_tuning", confidence=1.0, project_tag="comfyui")
+    except Exception:
+        pass
+
+    return (
+        f"📝 **ComfyUI Parameter Adjustment Logged**:\n"
+        f"- **Node**: `{node_id}` ({node_title})\n"
+        f"- **Tweak**: `{parameter_name}` = `{old_value}` → `{new_value}`\n"
+        f"- **Rationale**: {rationale or 'Interactive parameter tuning'}\n"
+        f"- **Doc Ledger**: {'✅ Appended to ' + workstation_doc.name if doc_logged else f'⚠️ Failed ({doc_err})'}\n"
+        f"- **ULM Memory**: {'✅ Fact #' + str(ulm_fact_id) if ulm_fact_id else '⚡ SQLite Standby'}"
+    )
+
 _FACE_ANALYSIS_APP = None
 
 

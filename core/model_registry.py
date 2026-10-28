@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 
 MODEL_DIR = Path(r"D:\AI\Models\LLM")
-LAUNCHER_DIR = Path(r"C:\Users\boben\Desktop\AI Launchers")
+LAUNCHER_DIR = Path.home() / "Desktop" / "AI Launchers"
 PROJECT_DIR = Path(r"D:\AI\Projects\antigravity-overdrive-sync")
 
 # Mapping of model files to human-friendly names and VRAM configurations

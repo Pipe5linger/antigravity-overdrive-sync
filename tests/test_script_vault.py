@@ -13,6 +13,7 @@ def temp_db():
     db.initialize_db()
     yield db
     # Cleanup
+    db.close_connection()
     for p in [Path(db_path), Path(db_path + "-wal"), Path(db_path + "-shm")]:
         if p.exists():
             try:

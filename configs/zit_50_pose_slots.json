@@ -1,0 +1,510 @@
+{
+  "tier1": [
+    {
+      "tier": "Tier 1: Identity Anchor",
+      "name": "Anchor Slot 01 (Direct Frontal Portrait)",
+      "pose": "Extreme macro photography with tight focal framing on the face. Direct frontal close-up portrait with shoulders squared, head held straight, chin slightly lowered, eyes engaging camera directly with symmetrical facial framing, sharp nose bridge, cheekbones and jawline in perfect balance. Hyper-detailed iris with amber-gold flecks, individual eyelashes, and authentic epidermal pores",
+      "expression": "a calm, intense direct gaze with parted soft naturally contoured satin lips and clean white teeth slightly visible",
+      "attire": "bare shoulders and neck",
+      "env": "in a high-end minimalist editorial fashion studio with smooth seamless neutral warm-grey backdrop",
+      "rig": "Roger Deakins (Arri LF 32mm Tungsten)",
+      "physics": "realskin, high-fidelity subsurface scattering with soft biological skin warmth, natural pore structure without plastic smoothing"
+    },
+    {
+      "tier": "Tier 1: Identity Anchor",
+      "name": "Anchor Slot 02 (Three-Quarter Profile Right)",
+      "pose": "Extreme macro photography with tight focal framing on the face. Three-quarter close-up portrait angled 30 degrees to the right, head subtly tilted, defining right cheekbone and jawline against neck shadow, gazing slightly off-center. Hyper-detailed iris with amber-gold flecks, individual eyelashes, and authentic epidermal pores",
+      "expression": "an enigmatic, heavy-lidded sultry gaze with soft-smudged smoky eyeliner and subtle sardonic half-smile",
+      "attire": "bare shoulders and neck",
+      "env": "in an opulent private penthouse suite overlooking rainy Paris at 3 AM",
+      "rig": "Denis Villeneuve (Alexa 65 Anamorphic 50mm)",
+      "physics": "realskin, high-fidelity subsurface scattering with soft biological skin warmth, natural pore structure without plastic smoothing"
+    },
+    {
+      "tier": "Tier 1: Identity Anchor",
+      "name": "Anchor Slot 03 (Three-Quarter Profile Left)",
+      "pose": "Extreme macro photography with tight focal framing on the face. Three-quarter close-up portrait angled 30 degrees to the left, head turned toward directional key light, highlighting left cheekbone bone structure and jawline contour. Hyper-detailed iris with amber-gold flecks, individual eyelashes, and authentic epidermal pores",
+      "expression": "a playful knowing half-smile with moist soft satin lips and amber-gold flecks catching neon light",
+      "attire": "bare shoulders and neck",
+      "env": "standing on wet cobblestones of a Montmartre alleyway under warm amber streetlamps",
+      "rig": "Wong Kar-Wai (Cooke 40mm f/1.4 Neon)",
+      "physics": "realskin, high-fidelity subsurface scattering with soft biological skin warmth, natural pore structure without plastic smoothing"
+    },
+    {
+      "tier": "Tier 1: Identity Anchor",
+      "name": "Anchor Slot 04 (Chin On Hand Thoughtful Lean)",
+      "pose": "Extreme macro photography with tight focal framing on the face. Close-up portrait resting delicate chin on curved knuckles of right hand, manicured fingers lightly framing jawline, head angled thoughtfully forward. Hyper-detailed iris with amber-gold flecks, individual eyelashes, and authentic epidermal pores",
+      "expression": "a thoughtful, captivating upward gaze with raised arched sable brow and relaxed lips",
+      "attire": "bare shoulders and neck",
+      "env": "editorial fashion studio with smooth seamless warm-grey backdrop",
+      "rig": "Helmut Newton (Hasselblad 80mm B&W High-Fashion)",
+      "physics": "realskin, high-fidelity subsurface scattering with soft biological skin warmth, natural pore structure without plastic smoothing"
+    },
+    {
+      "tier": "Tier 1: Identity Anchor",
+      "name": "Anchor Slot 05 (Full Profile Right Silhouette)",
+      "pose": "Extreme macro photography with tight focal framing on the face. Sharp 90-degree pure side profile facing right, head held high with straight posture, delicate button nose supratip break, sculpted jawline, lips and forehead contour in razor profile. Hyper-detailed iris with amber-gold flecks, individual eyelashes, and authentic epidermal pores",
+      "expression": "a serene composed expression with long curled eyelashes visible in profile and closed satin lips",
+      "attire": "bare shoulders and neck",
+      "env": "neutral studio backdrop with seamless dark charcoal cyclorama wall",
+      "rig": "David Fincher (Red 8K Leica 27mm Monochromatic)",
+      "physics": "realskin, high-fidelity subsurface scattering with soft biological skin warmth, natural pore structure without plastic smoothing"
+    },
+    {
+      "tier": "Tier 1: Identity Anchor",
+      "name": "Anchor Slot 06 (Full Profile Left Silhouette)",
+      "pose": "Extreme macro photography with tight focal framing on the face. Sharp 90-degree pure side profile facing left, neck extended gracefully, showcasing refined nose bridge, full lip projection, ear geometry and cheekbone contour. Hyper-detailed iris with amber-gold flecks, individual eyelashes, and authentic epidermal pores",
+      "expression": "an alluring contemplative expression gazing forward into warm ambient shadows",
+      "attire": "bare shoulders and neck",
+      "env": "inside an opulent private French boudoir with vintage mirrors and warm ambient shadows",
+      "rig": "Gordon Willis (Baltar 50mm f/2.0 Low-Key Sepia)",
+      "physics": "realskin, high-fidelity subsurface scattering with soft biological skin warmth, natural pore structure without plastic smoothing"
+    },
+    {
+      "tier": "Tier 1: Identity Anchor",
+      "name": "Anchor Slot 07 (Dramatic Low-Angle Head Tilt)",
+      "pose": "Extreme macro photography with tight focal framing on the face. Low-angle close-up looking up, head tilted back slightly with regal confidence, looking down into camera lens, clean jawline, throat, and clavicle contour in sharp focus. Hyper-detailed iris with amber-gold flecks, individual eyelashes, and authentic epidermal pores",
+      "expression": "a dominant, sultry half-lidded gaze looking down with a subtle knowing smirk",
+      "attire": "bare shoulders and neck",
+      "env": "in a candlelit luxury suite with carved oak headboard and dark velvet bolsters",
+      "rig": "Stanley Kubrick (Zeiss 50mm f/0.7 Candlelit)",
+      "physics": "realskin, high-fidelity subsurface scattering with soft biological skin warmth, natural pore structure without plastic smoothing"
+    },
+    {
+      "tier": "Tier 1: Identity Anchor",
+      "name": "Anchor Slot 08 (High-Angle Upward Gaze)",
+      "pose": "Extreme macro photography with tight focal framing on the face. High-angle close-up looking down, head tilted back and chin lifted looking up toward camera, wide almond hazel-green irises capturing bright catchlights. Hyper-detailed iris with amber-gold flecks, individual eyelashes, and authentic epidermal pores",
+      "expression": "a soft intimate breathless gaze with parted lips and dilated hazel pupils",
+      "attire": "bare shoulders and neck",
+      "env": "in a luxury modern duplex with polished dark marble floors and minimalist lighting",
+      "rig": "Quentin Tarantino (Ultra Speed 40mm Punchy)",
+      "physics": "realskin, high-fidelity subsurface scattering with soft biological skin warmth, natural pore structure without plastic smoothing"
+    },
+    {
+      "tier": "Tier 1: Identity Anchor",
+      "name": "Anchor Slot 09 (Left Shoulder Sidelong Look-Back)",
+      "pose": "Extreme macro photography with tight focal framing on the face. Torso rotated 60 degrees away to the right, head turned back over left shoulder with casual elegance, left clavicle and trapezius muscle engaged, looking back over shoulder. Hyper-detailed iris with amber-gold flecks, individual eyelashes, and authentic epidermal pores",
+      "expression": "a sultry sidelong glance over left shoulder with heavy-lidded hazel eyes and parted soft lips",
+      "attire": "bare shoulders and neck",
+      "env": "in a private high-fashion boudoir with deep velvet drapery and warm amber rim lighting",
+      "rig": "Ridley Scott (Panavision 50mm f/1.4 Anamorphic)",
+      "physics": "realskin, high-fidelity subsurface scattering with soft biological skin warmth, natural pore structure without plastic smoothing"
+    },
+    {
+      "tier": "Tier 1: Identity Anchor",
+      "name": "Anchor Slot 10 (Right Shoulder 45-Deg Glance)",
+      "pose": "Extreme macro photography with tight focal framing on the face. Torso rotated 45 degrees away to the left, head turned back over right shoulder, right deltoid and cheekbone in sharp relief, looking back toward viewer. Hyper-detailed iris with amber-gold flecks, individual eyelashes, and authentic epidermal pores",
+      "expression": "a sharp, witty spark in her eyes paired with an amused confident micro-smirk",
+      "attire": "bare shoulders and neck",
+      "env": "inside a moody high-tech cybernetic sanctuary in Neo-Paris with dark brushed aluminum panels",
+      "rig": "Michael Mann (Sony CineAlta 28mm Blue Ambient)",
+      "physics": "realskin, high-fidelity subsurface scattering with soft biological skin warmth, natural pore structure without plastic smoothing"
+    },
+    {
+      "tier": "Tier 1: Identity Anchor",
+      "name": "Anchor Slot 11 (Tilted Head Natural Smile)",
+      "pose": "Extreme macro photography with tight focal framing on the face. Close-up portrait with head tilted playfully 15 degrees to the side, spiral corkscrew curls spilling over cheek, natural joyful energy. Hyper-detailed iris with amber-gold flecks, individual eyelashes, and authentic epidermal pores",
+      "expression": "a radiant magnetic smile with parted lips revealing clean ivory teeth, eyes crinkling with genuine warmth",
+      "attire": "bare shoulders and neck",
+      "env": "in a high-end commercial fashion studio with neutral medium-grey background",
+      "rig": "Roger Deakins (Arri LF 32mm Tungsten)",
+      "physics": "realskin, high-fidelity subsurface scattering with soft biological skin warmth, natural pore structure without plastic smoothing"
+    },
+    {
+      "tier": "Tier 1: Identity Anchor",
+      "name": "Anchor Slot 12 (Hands Framing Face)",
+      "pose": "Extreme macro photography with tight focal framing on the face. Close-up portrait with both manicured hands brought up to frame temples and jawline, delicate fingers gently touching wet ringlet curls framing the cheeks. Hyper-detailed iris with amber-gold flecks, individual eyelashes, and authentic epidermal pores",
+      "expression": "an intense hypnotic direct stare engaging the camera through framing fingers",
+      "attire": "bare shoulders and neck",
+      "env": "in an opulent private penthouse suite overlooking rainy Paris at 3 AM",
+      "rig": "Denis Villeneuve (Alexa 65 Anamorphic 50mm)",
+      "physics": "realskin, high-fidelity subsurface scattering with soft biological skin warmth, natural pore structure without plastic smoothing"
+    },
+    {
+      "tier": "Tier 1: Identity Anchor",
+      "name": "Anchor Slot 13 (Reclining Pillow Overhead)",
+      "pose": "Extreme macro photography with tight focal framing on the face. Bird's-eye overhead close-up portrait, reclining on back with voluminous 3B/3C spiral curls fanned out across dark silk pillow, face framed from above. Hyper-detailed iris with amber-gold flecks, individual eyelashes, and authentic epidermal pores",
+      "expression": "a dreamy, relaxed bedroom gaze looking straight up into the lens with soft natural lips",
+      "attire": "bare shoulders and neck",
+      "env": "in a private high-fashion boudoir with deep velvet drapery and warm amber rim lighting",
+      "rig": "Wong Kar-Wai (Cooke 40mm f/1.4 Neon)",
+      "physics": "realskin, high-fidelity subsurface scattering with soft biological skin warmth, natural pore structure without plastic smoothing"
+    },
+    {
+      "tier": "Tier 1: Identity Anchor",
+      "name": "Anchor Slot 14 (Sarcastic Asymmetrical Half-Smirk)",
+      "pose": "Extreme macro photography with tight focal framing on the face. Three-quarter close-up portrait, one dark sable brow subtly arched, signature knowing asymmetrical half-smirk, head cocked with razor wit. Hyper-detailed iris with amber-gold flecks, individual eyelashes, and authentic epidermal pores",
+      "expression": "a wicked, razor-sharp sarcastic micro-smirk with amused hazel eyes and knowing poise",
+      "attire": "bare shoulders and neck",
+      "env": "editorial fashion studio with smooth seamless warm-grey backdrop",
+      "rig": "Helmut Newton (Hasselblad 80mm B&W High-Fashion)",
+      "physics": "realskin, high-fidelity subsurface scattering with soft biological skin warmth, natural pore structure without plastic smoothing"
+    },
+    {
+      "tier": "Tier 1: Identity Anchor",
+      "name": "Anchor Slot 15 (Chiaroscuro Rim-Lit Profile)",
+      "pose": "Extreme macro photography with tight focal framing on the face. Close-up portrait in deep chiaroscuro, head turned 45 degrees into darkness while sharp directional rim light traces forehead, button nose tip, lips, and jawline contour. Hyper-detailed iris with amber-gold flecks, individual eyelashes, and authentic epidermal pores",
+      "expression": "an enigmatic, shadowy intense gaze half-concealed in atmospheric shadow",
+      "attire": "bare shoulders and neck",
+      "env": "neutral studio backdrop with seamless dark charcoal cyclorama wall",
+      "rig": "David Fincher (Red 8K Leica 27mm Monochromatic)",
+      "physics": "realskin, high-fidelity subsurface scattering with soft biological skin warmth, natural pore structure without plastic smoothing"
+    }
+  ],
+  "tier2": [
+    {
+      "tier": "Tier 2: Raw Anatomy",
+      "name": "Anatomy Slot 01 (Kneeling Frontal Proportions)",
+      "pose": "Full body or medium shot capturing complete anatomical proportion. Kneeling tall with spine erect, both hands resting on bare 30-inch muscular thighs, narrow 24-inch waist and flared 38-inch hips in direct frontal view, quadriceps and abdominal muscle definition visible",
+      "expression": "a confident direct gaze with soft-smudged smoky eyeliner and subtle knowing smirk",
+      "attire": "completely nude, bare unblemished realskin with anatomical precision",
+      "env": "in an intimate candlelit Parisian boudoir with obsidian black satin sheets and warm ambient shadows",
+      "rig": "Stanley Kubrick (Zeiss 50mm f/0.7 Candlelit)",
+      "physics": "realskin, authentic biological micro-textures, warm subcutaneous dermal scattering, and zero plastic smoothing"
+    },
+    {
+      "tier": "Tier 2: Raw Anatomy",
+      "name": "Anatomy Slot 02 (Reclining Torso 3/4 Hip Curve)",
+      "pose": "Full body or medium shot capturing complete anatomical proportion. Cowboy medium shot, reclining on one elbow across satin pillows, torso twisted 30 degrees to accentuate waist-to-hip ratio and natural bust silhouette, oblique muscles tensed on one side",
+      "expression": "a sultry half-lidded gaze looking over bare shoulder with parted soft naturally contoured lips",
+      "attire": "sheer black micro-lace bralette with delicate high-waist silk thong",
+      "env": "in an opulent Parisian master bedroom suite with deep crimson silk velvet bedding",
+      "rig": "Roger Deakins (Arri LF 32mm Tungsten)",
+      "physics": "realskin, authentic biological micro-textures, warm subcutaneous dermal scattering, and zero plastic smoothing"
+    },
+    {
+      "tier": "Tier 2: Raw Anatomy",
+      "name": "Anatomy Slot 03 (Standing Frontal Contrapposto)",
+      "pose": "Full body or medium shot capturing complete anatomical proportion. Full body shot from head to toe, standing in natural contrapposto with weight on right hip, hands resting on waistline, showing athletic leg definition and 0.66 waist-to-hip ratio",
+      "expression": "a dominant poised expression with arched sable brows and direct eye contact",
+      "attire": "completely nude, bare realskin with natural biological dermal tones",
+      "env": "high-end commercial fashion studio with neutral medium-grey background",
+      "rig": "David Fincher (Red 8K Leica 27mm Monochromatic)",
+      "physics": "realskin, authentic biological micro-textures, warm subcutaneous dermal scattering, and zero plastic smoothing"
+    },
+    {
+      "tier": "Tier 2: Raw Anatomy",
+      "name": "Anatomy Slot 04 (Standing 3/4 Rear Arch)",
+      "pose": "Full body or medium shot capturing complete anatomical proportion. Full body three-quarter rear silhouette, standing with arched lower spine, one hand on hip, head turned back over shoulder, 38-inch hip curve and 30-inch thighs in profile",
+      "expression": "an alluring sidelong glance with smudged smoky eyeliner and enigmatic half-smile",
+      "attire": "bare realskin, minimalist high-cut silk brief accentuating hip contour",
+      "env": "in a luxury penthouse suite overlooking rainy Paris skyline at 3 AM",
+      "rig": "Denis Villeneuve (Alexa 65 Anamorphic 50mm)",
+      "physics": "realskin, authentic biological micro-textures, warm subcutaneous dermal scattering, and zero plastic smoothing"
+    },
+    {
+      "tier": "Tier 2: Raw Anatomy",
+      "name": "Anatomy Slot 05 (Steamy Bath Reclining)",
+      "pose": "Full body or medium shot capturing complete anatomical proportion. Medium close shot, reclining in marble clawfoot tub, arms resting along rim, bare wet collarbone and shoulders glistening with water droplets, chest partially submerged",
+      "expression": "a relaxed breathless sensual expression with head tilted back and parted lips",
+      "attire": "completely nude, wet bare realskin glistening under soft amber light",
+      "env": "in a steamy private marble bathroom with oversized clawfoot tub and warm atmospheric mist",
+      "rig": "Stanley Kubrick (Zeiss 50mm f/0.7 Candlelit)",
+      "physics": "realskin, authentic biological micro-textures, warm subcutaneous dermal scattering, and zero plastic smoothing"
+    },
+    {
+      "tier": "Tier 2: Raw Anatomy",
+      "name": "Anatomy Slot 06 (Seated Cross-Legged Torso)",
+      "pose": "Full body or medium shot capturing complete anatomical proportion. Cowboy medium shot, seated cross-legged on polished floor with straight spine, hands resting on knees, showing defined ribcage, waist, and quadriceps symmetry",
+      "expression": "a calm serene analytical expression engaging the camera directly",
+      "attire": "minimalist charcoal silk slip unbuttoned revealing bare chest",
+      "env": "concrete minimalist photo studio with smooth polished grey floor",
+      "rig": "Roger Deakins (Arri LF 32mm Tungsten)",
+      "physics": "realskin, authentic biological micro-textures, warm subcutaneous dermal scattering, and zero plastic smoothing"
+    },
+    {
+      "tier": "Tier 2: Raw Anatomy",
+      "name": "Anatomy Slot 07 (Side Lying Hip Curve)",
+      "pose": "Full body or medium shot capturing complete anatomical proportion. Full body horizontal shot, lying on side with legs loosely stacked, top hip pushed forward, hand tracing waist curve, 0.66 ratio clearly visible",
+      "expression": "a dreamy bedroom expression with heavy-lidded hazel eyes",
+      "attire": "completely nude, bare unblemished realskin",
+      "env": "reclining across a vintage velvet chaise lounge beside marble fireplace",
+      "rig": "Gordon Willis (Baltar 50mm f/2.0 Low-Key Sepia)",
+      "physics": "realskin, authentic biological micro-textures, warm subcutaneous dermal scattering, and zero plastic smoothing"
+    },
+    {
+      "tier": "Tier 2: Raw Anatomy",
+      "name": "Anatomy Slot 08 (Athletic Stretch Overhead)",
+      "pose": "Full body or medium shot capturing complete anatomical proportion. Full body shot, standing tall stretching arms overhead with fingers interlaced, elongating torso and ribcage, narrow waist and athletic abs visible",
+      "expression": "a playful confident smile with clean white teeth",
+      "attire": "minimalist black silk micro-harness top and sheer bottoms",
+      "env": "neutral studio backdrop with seamless dark charcoal cyclorama wall",
+      "rig": "Helmut Newton (Hasselblad 80mm B&W High-Fashion)",
+      "physics": "realskin, authentic biological micro-textures, warm subcutaneous dermal scattering, and zero plastic smoothing"
+    },
+    {
+      "tier": "Tier 2: Raw Anatomy",
+      "name": "Anatomy Slot 09 (All-Fours Arched Spine)",
+      "pose": "Full body or medium shot capturing complete anatomical proportion. Medium full shot, propped on hands and knees with arched spine, weight on hands, showing muscular shoulders, narrow waist, and flared hips",
+      "expression": "an intense commanding stare with dilated pupils and soft-smudged smoky kohl liner",
+      "attire": "completely nude, bare realskin",
+      "env": "in a private high-fashion boudoir with deep velvet drapery",
+      "rig": "Quentin Tarantino (Ultra Speed 40mm Punchy)",
+      "physics": "realskin, authentic biological micro-textures, warm subcutaneous dermal scattering, and zero plastic smoothing"
+    },
+    {
+      "tier": "Tier 2: Raw Anatomy",
+      "name": "Anatomy Slot 10 (Seated Forward Lean)",
+      "pose": "Full body or medium shot capturing complete anatomical proportion. Cowboy shot, leaning forward with elbows on knees, resting chin on palm, gazing intensely up at camera, chest and collarbone prominent",
+      "expression": "an alluring intimate gaze with parted soft naturally contoured lips and amber flecks",
+      "attire": "open silk robe draped off bare shoulders and chest",
+      "env": "in a candlelit luxury suite with carved oak headboard",
+      "rig": "Stanley Kubrick (Zeiss 50mm f/0.7 Candlelit)",
+      "physics": "realskin, authentic biological micro-textures, warm subcutaneous dermal scattering, and zero plastic smoothing"
+    }
+  ],
+  "tier3": [
+    {
+      "tier": "Tier 3: Wardrobe Agnosticism",
+      "name": "Wardrobe Slot 01 (Emerald Velvet Gown)",
+      "pose": "Dynamic full-length shot, descending ornate marble staircase in motion, gown train trailing behind, glancing back over one shoulder",
+      "expression": "a regal high-fashion editorial gaze with neutral soft naturally contoured lips",
+      "attire": "Wearing an emerald-green liquid velvet backless evening gown with plunging cowl neckline",
+      "env": "in a grand Parisian opera house foyer with gilded balustrades and crystal chandeliers",
+      "rig": "Helmut Newton (Hasselblad 80mm B&W High-Fashion)",
+      "physics": "heavy silk velvet drapery in fluid motion with authentic micro-creasing and soft specular sheen"
+    },
+    {
+      "tier": "Tier 3: Wardrobe Agnosticism",
+      "name": "Wardrobe Slot 02 (Ivory Power Suit)",
+      "pose": "Low-angle three-quarter standing shot looking slightly down at camera, hands hooked in trouser pockets, blazer falling open",
+      "expression": "an authoritative commanding expression with sharp analytical eye contact",
+      "attire": "Wearing an impeccably tailored cream-ivory linen double-breasted suit open over black chantilly lace bralette",
+      "env": "in an ultra-modern glass-walled office suite overlooking rainy Paris twilight",
+      "rig": "David Fincher (Red 8K Leica 27mm Monochromatic)",
+      "physics": "textured crisp Italian linen fabric with visible weave and natural drape"
+    },
+    {
+      "tier": "Tier 3: Wardrobe Agnosticism",
+      "name": "Wardrobe Slot 03 (Cobalt Moto Jacket & Denim)",
+      "pose": "Candid medium shot, leaning back against a vintage cafe window with one knee bent, holding espresso",
+      "expression": "a candid unguarded laugh with natural eye crinkles and white teeth",
+      "attire": "Wearing a cobalt-blue distressed leather motorcycle jacket over white cropped ribbed tank and light-wash ripped selvedge denim",
+      "env": "outside a bustling Montmartre sidewalk cafe with wet bistro chairs and neon pavement reflections",
+      "rig": "Wong Kar-Wai (Cooke 40mm f/1.4 Neon)",
+      "physics": "distressed light denim texture with visible cotton grain, rich blue leather sheen with surface creasing"
+    },
+    {
+      "tier": "Tier 3: Wardrobe Agnosticism",
+      "name": "Wardrobe Slot 04 (Scarlet Latex & Cigarette Pants)",
+      "pose": "Dramatic side profile shot, head turned sharply to camera with chin lifted, arching back to emphasize hourglass silhouette",
+      "expression": "a sharp calculating stare with glossy soft naturally contoured lips and soft-smudged smoky eyeliner",
+      "attire": "Wearing a high-gloss liquid scarlet-red latex underwire corset top with matte charcoal cigarette trousers",
+      "env": "inside a moody high-tech cybernetic corridor in Neo-Paris with brushed titanium walls and blue LED shafts",
+      "rig": "Michael Mann (Sony CineAlta 28mm Blue Ambient)",
+      "physics": "high-gloss scarlet latex catching razor-sharp specular highlights and ray-traced neon reflections"
+    },
+    {
+      "tier": "Tier 3: Wardrobe Agnosticism",
+      "name": "Wardrobe Slot 05 (Lace Corset & Gold Palazzo)",
+      "pose": "Reclining full-length shot, lounging diagonally across antique velvet chaise, one arm draped over backrest",
+      "expression": "an alluring intimate gaze with a subtle knowing half-smile",
+      "attire": "Wearing a structured obsidian French chantilly lace corset with sheer side panels and champagne-gold silk palazzo trousers",
+      "env": "in an intimate Marais boudoir beside a roaring marble fireplace with antique gilded mirrors",
+      "rig": "Stanley Kubrick (Zeiss 50mm f/0.7 Candlelit)",
+      "physics": "delicate French chantilly lace openwork casting lattice shadows onto realskin, fluid silk pooled on velvet"
+    },
+    {
+      "tier": "Tier 3: Wardrobe Agnosticism",
+      "name": "Wardrobe Slot 06 (Champagne Silk Slip)",
+      "pose": "High-angle shot looking down from above, seated on deep window sill with knees pulled to chest, rain-streaked glass behind",
+      "expression": "a soft dreamy contemplative gaze with relaxed soft naturally contoured lips",
+      "attire": "Wearing a champagne-gold fluid silk charmeuse slip dress with spaghetti straps and plunging open back",
+      "env": "in a luxury penthouse overlooking rainy Paris skyline at 3 AM through floor-to-ceiling glass",
+      "rig": "Denis Villeneuve (Alexa 65 Anamorphic 50mm)",
+      "physics": "luxurious fluid silk charmeuse with high specular sheen rippling over biological contours"
+    },
+    {
+      "tier": "Tier 3: Wardrobe Agnosticism",
+      "name": "Wardrobe Slot 07 (Camel Cashmere & Shorts)",
+      "pose": "Intimate seated close-to-medium shot, sitting cross-legged on plush sheepskin rug, leaning forward on elbows",
+      "expression": "a cozy unguarded expression with tousled ringlet curls falling across one eye",
+      "attire": "Wearing an oversized slouchy camel-beige chunky cable-knit cashmere sweater slipping off one shoulder over heather-grey jersey shorts",
+      "env": "in a sunlit Haussmann loft with raw oak herringbone floors and warm morning sunbeams",
+      "rig": "Roger Deakins (Arri LF 32mm Tungsten)",
+      "physics": "tactile brushed wool fibers and thick cable-knit yarn texture with visible fuzzy halo"
+    },
+    {
+      "tier": "Tier 3: Wardrobe Agnosticism",
+      "name": "Wardrobe Slot 08 (Crimson Kimono & Lace)",
+      "pose": "Three-quarter action shot, walking toward camera while gathering lapels of billowing silk kimono in mid-stride",
+      "expression": "a sultry seductive bedroom gaze with parted soft naturally contoured lips",
+      "attire": "Wearing a vibrant crimson silk floral jacquard kimono robe with gold dragon embroidery over black lace lingerie",
+      "env": "in a candlelit luxury suite with dark carved mahogany headboard and bronze floor candelabras",
+      "rig": "Gordon Willis (Baltar 50mm f/2.0 Low-Key Sepia)",
+      "physics": "translucent sheer lace tension revealing warm realskin texture, fluid crimson silk with motion blur"
+    },
+    {
+      "tier": "Tier 3: Wardrobe Agnosticism",
+      "name": "Wardrobe Slot 09 (Gothic Frock Coat & Leather)",
+      "pose": "Low-angle wide shot, standing on wet stone bridge parapet at night, heavy coat draped over shoulders like cape",
+      "expression": "a majestic brooding expression with calm regal poise",
+      "attire": "Wearing a structured charcoal-grey brocade tailored frock coat over tight black lambskin leather pants",
+      "env": "on Pont Alexandre III in Paris under ornate golden gaslamps with mist rising off the Seine",
+      "rig": "Stanley Kubrick (Zeiss 50mm f/0.7 Candlelit)",
+      "physics": "heavy textured brocade absorbing ambient light, polished lambskin leather catching amber streetlight reflections"
+    },
+    {
+      "tier": "Tier 3: Wardrobe Agnosticism",
+      "name": "Wardrobe Slot 10 (White Linen & Cutoffs)",
+      "pose": "Dynamic outdoor portrait, standing by open French doors on a sunny balcony, sleeves rolled up, hair caught in breeze",
+      "expression": "a radiant sun-kissed grin with vibrant eyes and windswept curls",
+      "attire": "Wearing an oversized crisp white linen button-down shirt over a neutral silk camisole and tailored pleated high-waisted shorts",
+      "env": "on a private sunlit Parisian balcony overlooking Haussmann zinc rooftops with warm afternoon light",
+      "rig": "Roger Deakins (Arri LF 32mm Tungsten)",
+      "physics": "breathable open-weave white linen with crisp sunlit transparency, textured cotton weave"
+    },
+    {
+      "tier": "Tier 3: Wardrobe Agnosticism",
+      "name": "Wardrobe Slot 11 (Black Vinyl Trench)",
+      "pose": "Dynamic walking street snapshot, striding forward through heavy rain with umbrella tilted back",
+      "expression": "a sharp intense editorial gaze focused forward with naturally contoured lips",
+      "attire": "Wearing a high-gloss black vinyl belted trench coat with patent leather thigh-high boots",
+      "env": "on glistening wet Boulevard Saint-Germain at night with neon sign reflections",
+      "rig": "Helmut Newton (Hasselblad 80mm B&W High-Fashion)",
+      "physics": "wet liquid vinyl surface with micro-water rivulets and crisp anamorphic light streaks"
+    },
+    {
+      "tier": "Tier 3: Wardrobe Agnosticism",
+      "name": "Wardrobe Slot 12 (Sapphire Velvet Bustier)",
+      "pose": "Seated 3/4 shot, sitting backwards on vintage bistro stool with one elbow on bar counter, chin in hand",
+      "expression": "a playful sardonic half-smile with knowing arched brow",
+      "attire": "Wearing a structured royal sapphire-blue silk velvet boned bustier with black silk midi skirt and high leg slit",
+      "env": "inside an atmospheric 1920s Art Deco cocktail lounge with brass fixtures and dark walnut bar",
+      "rig": "Michael Mann (Sony CineAlta 28mm Blue Ambient)",
+      "physics": "deep pile sapphire velvet catching rich blue highlights on ridges, liquid silk skirt drape"
+    },
+    {
+      "tier": "Tier 3: Wardrobe Agnosticism",
+      "name": "Wardrobe Slot 13 (Ribbed Crop Top & Cargoes)",
+      "pose": "Urban street shot, crouching on one knee in athletic stance on cobblestones, looking up at camera",
+      "expression": "a cool relaxed confident expression with intense gaze",
+      "attire": "Wearing a sleeveless heather-grey ribbed athletic crop top exposing flat midriff with olive technical cargo trousers",
+      "env": "in a narrow industrial alleyway with exposed brickwork, iron fire escapes, and volumetric mist",
+      "rig": "Wong Kar-Wai (Cooke 40mm f/1.4 Neon)",
+      "physics": "stretchy ribbed cotton hugging torso contours, heavy ripstop canvas fabric with authentic stitch details"
+    },
+    {
+      "tier": "Tier 3: Wardrobe Agnosticism",
+      "name": "Wardrobe Slot 14 (Gold Lam\u00e9 Gown)",
+      "pose": "Full-length fashion editorial shot, arching spine gracefully with one arm raised brushing hair back",
+      "expression": "a haughty commanding look of supreme elegance with sculpted cheekbones",
+      "attire": "Wearing a liquid metallic molten-gold lam\u00e9 asymmetrical one-shoulder evening gown with thigh-high slit",
+      "env": "in a minimalist marble gallery hall with tall arched windows and dramatic golden light shafts",
+      "rig": "Denis Villeneuve (Alexa 65 Anamorphic 50mm)",
+      "physics": "molten liquid gold lam\u00e9 reflecting undulating warm highlights across body contours"
+    },
+    {
+      "tier": "Tier 3: Wardrobe Agnosticism",
+      "name": "Wardrobe Slot 15 (Breton Stripe & Scarf)",
+      "pose": "Intimate close-to-medium portrait, leaning forward over outdoor cafe table with hands clasped under chin",
+      "expression": "an intelligent curious look with tilted head and playful smirk",
+      "attire": "Wearing an authentic navy-and-cream Breton striped boatneck jersey top with small red silk neck scarf",
+      "env": "at a Parisian street corner cafe under a deep red awning with blurred pedestrian bokeh",
+      "rig": "Wong Kar-Wai (Cooke 40mm f/1.4 Neon)",
+      "physics": "soft knitted French cotton jersey with sharp stripe geometry wrapping bust curvature"
+    }
+  ],
+  "tier4": [
+    {
+      "tier": "Tier 4: 3D Spatial Awareness",
+      "name": "Spatial Slot 01 (Dynamic Walking Forward)",
+      "pose": "Full body shot from head to toe capturing complete spatial perspective. Walking confidently forward in mid-stride, 3B/3C indigo curls swaying with dynamic inertia, complete footwear and feet visible from head to toe",
+      "expression": "a calm dominant analytical focus looking forward past the camera",
+      "attire": "Wearing a tailored charcoal wool trench coat open over black silk camisole and trousers with leather boots",
+      "env": "standing on the wet cobblestones of a Montmartre alleyway at 2 AM with glistening reflections",
+      "rig": "Denis Villeneuve (Alexa 65 Anamorphic 50mm)",
+      "physics": "realskin, dynamic motion physics, crisp ringlet inertia, and authentic spatial depth"
+    },
+    {
+      "tier": "Tier 4: 3D Spatial Awareness",
+      "name": "Spatial Slot 02 (Back View Ringlet Volume)",
+      "pose": "Full body shot from head to toe capturing complete spatial perspective. Viewed directly from behind, head turned slightly away, voluminous 3B/3C spiral ringlets cascading down spine to mid-back with electric indigo highlights",
+      "expression": "subtle side profile silhouette visible glancing away from camera",
+      "attire": "backless black silk gown exposing bare sculpted spine and shoulder blades",
+      "env": "on an intimate wrought-iron balcony overlooking rainy zinc rooftops of Paris",
+      "rig": "Roger Deakins (Arri LF 32mm Tungsten)",
+      "physics": "realskin, dynamic motion physics, crisp ringlet inertia, and authentic spatial depth"
+    },
+    {
+      "tier": "Tier 4: 3D Spatial Awareness",
+      "name": "Spatial Slot 03 (Walk Away Look Back)",
+      "pose": "Full body shot from head to toe capturing complete spatial perspective. Body oriented away while walking, head sharply turned back looking directly over bare shoulder, showing back curvature and facial connection",
+      "expression": "a sultry teasing glance over shoulder with smudged soft-smudged smoky eyeliner",
+      "attire": "tight black ribbed knit midi dress with deep open back and ankle boots",
+      "env": "under the wrought-iron arches of a secluded Parisian passage covered gallery",
+      "rig": "Wong Kar-Wai (Cooke 40mm f/1.4 Neon)",
+      "physics": "realskin, dynamic motion physics, crisp ringlet inertia, and authentic spatial depth"
+    },
+    {
+      "tier": "Tier 4: 3D Spatial Awareness",
+      "name": "Spatial Slot 04 (Dynamic Feline Crouch)",
+      "pose": "Full body shot from head to toe capturing complete spatial perspective. Crouching low to the floor in powerful athletic stance, weight on balls of feet, one hand touching ground, knees apart framing athletic thighs",
+      "expression": "an intense predatory direct stare with dilated hazel-green pupils",
+      "attire": "fitted black matte technical bodysuit with mesh side panels and combat boots",
+      "env": "inside a moody high-tech cybernetic sanctuary with dark brushed aluminum panels and floor mist",
+      "rig": "Michael Mann (Sony CineAlta 28mm Blue Ambient)",
+      "physics": "realskin, dynamic motion physics, crisp ringlet inertia, and authentic spatial depth"
+    },
+    {
+      "tier": "Tier 4: 3D Spatial Awareness",
+      "name": "Spatial Slot 05 (Bird's Eye Overhead)",
+      "pose": "Full body shot from head to toe capturing complete spatial perspective. From high camera angle directly above, reclining on round velvet daybed with arms extended, chin lifted looking straight up into overhead lens",
+      "expression": "an intense mesmerizing gaze directed straight up into the camera",
+      "attire": "emerald silk slip dress draped across daybed cushions with bare arms and legs",
+      "env": "in an antique French rococo salon with gilded plaster moldings and crystal chandeliers",
+      "rig": "Quentin Tarantino (Ultra Speed 40mm Punchy)",
+      "physics": "realskin, dynamic motion physics, crisp ringlet inertia, and authentic spatial depth"
+    },
+    {
+      "tier": "Tier 4: 3D Spatial Awareness",
+      "name": "Spatial Slot 06 (Worm's Eye Upward)",
+      "pose": "Full body shot from head to toe capturing complete spatial perspective. From dramatic low camera angle near floor level looking upward, standing tall in authoritative stance with one foot forward",
+      "expression": "a dominant haughty expression with raised eyebrow and piercing almond hazel eyes",
+      "attire": "tailored black double-breasted power suit with wide-leg trousers pooling over heels",
+      "env": "in an avant-garde architectural photography studio with concrete columns and light shafts",
+      "rig": "David Fincher (Red 8K Leica 27mm Monochromatic)",
+      "physics": "realskin, dynamic motion physics, crisp ringlet inertia, and authentic spatial depth"
+    },
+    {
+      "tier": "Tier 4: 3D Spatial Awareness",
+      "name": "Spatial Slot 07 (Full Contrapposto Standing)",
+      "pose": "Full body shot from head to toe capturing complete spatial perspective. Standing in classic contrapposto stance with full 5'5\" height against architectural background, complete head-to-shoe framing",
+      "expression": "a calm confident smile with warm golden-olive complexion and intelligent gaze",
+      "attire": "black cashmere turtleneck tucked into high-waisted pleated wool trousers with oxford shoes",
+      "env": "in an opulent penthouse suite with floor-to-ceiling glass and double-height ceilings",
+      "rig": "Roger Deakins (Arri LF 32mm Tungsten)",
+      "physics": "realskin, dynamic motion physics, crisp ringlet inertia, and authentic spatial depth"
+    },
+    {
+      "tier": "Tier 4: 3D Spatial Awareness",
+      "name": "Spatial Slot 08 (Knees Drawn to Chest)",
+      "pose": "Full body shot from head to toe capturing complete spatial perspective. Sitting flat on floor with knees drawn tightly to chest, arms wrapped around shins, head resting on knees looking sideways",
+      "expression": "a contemplative intimate expression with soft eyes and relaxed soft naturally contoured lips",
+      "attire": "oversized white French linen button-down shirt loosely draped over bare legs",
+      "env": "in a luxury Parisian pied-a-terre with herringbone parquet floors and soft morning light",
+      "rig": "Stanley Kubrick (Zeiss 50mm f/0.7 Candlelit)",
+      "physics": "realskin, dynamic motion physics, crisp ringlet inertia, and authentic spatial depth"
+    },
+    {
+      "tier": "Tier 4: 3D Spatial Awareness",
+      "name": "Spatial Slot 09 (Mid-Motion Dynamic Turn)",
+      "pose": "Full body shot from head to toe capturing complete spatial perspective. Caught in dynamic motion turning around quickly as if called by name, ringlets swirling through air with motion blur on tips",
+      "expression": "a candid surprised expression with wide captivating hazel eyes and parted lips",
+      "attire": "fitted leather biker jacket over crimson silk slip with dark denim jeans",
+      "env": "on Pont Alexandre III bridge overlooking Seine at blue hour with glowing monuments",
+      "rig": "Ridley Scott (Panavision 50mm f/1.4 Anamorphic)",
+      "physics": "realskin, dynamic motion physics, crisp ringlet inertia, and authentic spatial depth"
+    },
+    {
+      "tier": "Tier 4: 3D Spatial Awareness",
+      "name": "Spatial Slot 10 (Floor Reclining Horizon)",
+      "pose": "Full body shot from head to toe capturing complete spatial perspective. Lying flat on back across dark hardwood flooring, arms splayed above head, one knee bent, head turned toward camera at ground level",
+      "expression": "a dreamy sensual daze with parted soft naturally contoured lips and amber flecks catching light",
+      "attire": "black silk slip with delicate lace trim, bare feet and legs fully framed",
+      "env": "in a private Parisian atelier apartment with moonlight beams through tall windows",
+      "rig": "Gordon Willis (Baltar 50mm f/2.0 Low-Key Sepia)",
+      "physics": "realskin, dynamic motion physics, crisp ringlet inertia, and authentic spatial depth"
+    }
+  ]
+}

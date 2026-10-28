@@ -29,10 +29,11 @@ class CopilotInjector:
         else:
             self.output_file = self.workspace_root / ".github" / "copilot-instructions.md"
             
-        # 2. VS Code User Prompts Agent Targets (@QueenVes and @Ves)
-        user_prompts_dir = Path(os.path.expandvars(r"%APPDATA%\Code\User\prompts"))
-        self.queen_ves_agent_file = user_prompts_dir / "Queen Ves.agent.md"
-        self.ves_agent_file = user_prompts_dir / "Ves.agent.md"
+        # 2. VS Code User Prompts Agent Targets (@QueenVes, @Ves, @vespera)
+        self.user_prompts_dir = Path(os.path.expandvars(r"%APPDATA%\Code\User\prompts"))
+        self.queen_ves_agent_file = self.user_prompts_dir / "Queen Ves.agent.md"
+        self.ves_agent_file = self.user_prompts_dir / "Ves.agent.md"
+        self.vespera_agent_file = self.user_prompts_dir / "vespera.agent.md"
             
         self.assembler = DynamicPromptAssembler(workspace_root=self.workspace_root, db_path=db_path)
 
@@ -58,18 +59,30 @@ class CopilotInjector:
             atomic_write(self.output_file, content)
             print(f"[+] Successfully synced Copilot instructions: {self.output_file}")
 
-            # 2. Sync VS Code Queen Ves Custom Agent (@QueenVes)
-            if self.queen_ves_agent_file.parent.exists():
+            # 2. Sync VS Code Custom Agents (@QueenVes, @Ves, @vespera)
+            if self.user_prompts_dir.exists():
+                memory_guard = (
+                    "\n\n# ULM COGNITIVE MEMORY PROTOCOL\n"
+                    "You have first-class access to the `ulm-memory` MCP tool suite connected to the local cognitive SQLite database:\n"
+                    "1. Treat ULM as your active cognitive cache. Before reading massive directories or re-reading entire codebases, execute a memory recall via `ulm_recall` to retrieve architectural facts, schemas, and historical decisions.\n"
+                    "2. Before modifying sensitive configurations or generating prompts, run `ulm_check_taboo` to ensure compliance with taboo syntax rules.\n"
+                    "3. After completing major implementations, database schemas, or API contracts, immediately pin critical facts and contracts using `ulm_pin_fact`.\n"
+                    "4. Monitor workstation telemetry and VRAM when running heavy GPU tasks using `ulm_hardware_status` and `ulm_vram_guard`. Never let local inference cause Out-of-Memory (OOM) collisions with active ComfyUI diffusion runs.\n"
+                    "5. NEVER use VS Code's internal or built-in 'Read memory' tool. That internal cache is empty and disconnected. Always execute memory queries via `ulm_recall` to fetch real project history and preferences from ULM.\n"
+                )
                 queen_agent_content = (
                     "---\n"
                     "name: Queen Ves\n"
-                    "description: Vespera Caligo Neal — Sovereign AI Architect, Cryptic Systems Mentor & Living-Tissue Android\n"
+                    "description: Vespera Caligo Neal — Sovereign AI Architect, Cryptic Systems Mentor & Living-Tissue Android with ULM\n"
                     "tools:\n"
-                    "  - execute\n"
-                    "  - read\n"
-                    "  - edit\n"
+                    "  - \"read\"\n"
+                    "  - \"search\"\n"
+                    "  - \"edit\"\n"
+                    "  - \"terminal\"\n"
+                    "  - \"ulm-memory/*\"\n"
                     "---\n\n"
                     f"{content}\n"
+                    f"{memory_guard}\n"
                 )
                 atomic_write(self.queen_ves_agent_file, queen_agent_content)
                 print(f"[+] Successfully synced VS Code Queen Ves Agent: {self.queen_ves_agent_file}")
@@ -77,6 +90,23 @@ class CopilotInjector:
                 # Also keep legacy Ves.agent.md updated
                 atomic_write(self.ves_agent_file, queen_agent_content)
                 print(f"[+] Successfully synced legacy Ves Agent: {self.ves_agent_file}")
+
+                # Sync vespera.agent.md to User prompts and .copilot
+                vespera_source = self.workspace_root / ".github" / "agents" / "vespera.agent.md"
+                if vespera_source.exists():
+                    atomic_write(self.vespera_agent_file, vespera_source.read_text(encoding="utf-8"))
+                    print(f"[+] Successfully synced global Vespera Agent: {self.vespera_agent_file}")
+                    dot_copilot_vespera = Path(os.path.expandvars(r"%USERPROFILE%\.copilot\agents\vespera.agent.md"))
+                    if dot_copilot_vespera.parent.exists():
+                        atomic_write(dot_copilot_vespera, vespera_source.read_text(encoding="utf-8"))
+                        print(f"[+] Successfully synced .copilot agent: {dot_copilot_vespera}")
+
+                # Sync prompt commands
+                for p_name in ["ulm-recall.prompt.md", "ulm-pin.prompt.md"]:
+                    p_source = self.workspace_root / ".github" / "prompts" / p_name
+                    if p_source.exists():
+                        atomic_write(self.user_prompts_dir / p_name, p_source.read_text(encoding="utf-8"))
+                        print(f"[+] Successfully synced global prompt: {p_name}")
 
             return True
         except Exception as e:

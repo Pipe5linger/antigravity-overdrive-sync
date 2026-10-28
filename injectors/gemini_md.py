@@ -26,38 +26,73 @@ class GeminiMdInjector(BaseInjector):
         self.workspace_root = Path(workspace_root) if workspace_root else PROJECT_ROOT
 
         # The SINGLE Sovereign Master Protocol Target:
-        # D:\AI\GEMINI.md is automatically discovered by Antigravity as the global user rule (user_global).
-        # Resolve master protocol target dynamically: check environment override first,
-        # fallback to D:\AI\GEMINI.md if present, otherwise write to workspace root.
+        # Resolve master protocol target dynamically:
+        # Priority 1: ULM_MASTER_PROTOCOL environment variable override
+        # Priority 2: Global Antigravity plugin rule: ~/.gemini/config/plugins/vespera-overdrive/rules/GEMINI.md
+        # Priority 3: Global Antigravity user rule: ~/.gemini/GEMINI.md
+        # Priority 4: Workspace root fallback: self.workspace_root / "GEMINI.md"
+        home_dir = Path.home()
         custom_protocol = os.environ.get("ULM_MASTER_PROTOCOL")
+        plugin_rules_target = home_dir / ".gemini" / "config" / "plugins" / "vespera-overdrive" / "rules" / "GEMINI.md"
+        global_user_rule = home_dir / ".gemini" / "GEMINI.md"
+
         if custom_protocol:
             self.master_protocol_file = Path(custom_protocol)
-        elif Path(r"D:\AI").exists():
-            self.master_protocol_file = Path(r"D:\AI\GEMINI.md")
+        elif plugin_rules_target.parent.exists():
+            self.master_protocol_file = plugin_rules_target
+        elif global_user_rule.parent.exists():
+            self.master_protocol_file = global_user_rule
         else:
             self.master_protocol_file = self.workspace_root / "GEMINI.md"
         self.target_files = [self.master_protocol_file]
 
-        home_dir = Path.home()
-        # Obsolete duplicate files across workspace sub-projects.
-        # Global user configuration rules (~/.gemini/config/AGENTS.md) are protected from deletion.
+        # Obsolete duplicate files across parent directories and workspace sub-projects.
+        # Parent directory rules (like D:\AI\GEMINI.md, D:\AI\Projects\AGENTS.md) cause Antigravity
+        # to walk up the tree and inject duplicate rules into every subproject opened under D:\AI!
+        # Protected: Global plugin rules, ~/.gemini/config/AGENTS.md, and workspace_root / "AGENTS.md".
         self.duplicate_files_to_purge = [
+            Path(r"D:\AI\GEMINI.md"),
+            Path(r"D:\AI\AGENTS.md"),
             Path(r"D:\AI\Projects\GEMINI.md"),
+            Path(r"D:\AI\Projects\AGENTS.md"),
             Path(r"D:\AI\Projects\ComfyUI\GEMINI.md"),
+            Path(r"D:\AI\Projects\ComfyUI\AGENTS.md"),
+            Path(r"D:\AI\Projects\ComfyUI\custom_nodes\ComfyUI-Lora-Manager\AGENTS.md"),
+            Path(r"D:\AI\Projects\ComfyUI\custom_nodes\comfyui-node-organizer\AGENTS.md"),
             Path(r"D:\AI\Projects\ZIT_LoRA_Trainer\GEMINI.md"),
+            Path(r"D:\AI\Projects\ZIT_LoRA_Trainer\AGENTS.md"),
+            Path(r"D:\AI\Projects\cline\sdk\AGENTS.md"),
+            Path(r"D:\AI\Projects\cline\sdk\packages\llms\AGENTS.md"),
+            Path(r"D:\AI\Projects\OneTrainer-master\OneTrainer-master\venv\src\diffusers\AGENTS.md"),
+            Path(r"D:\AI\Projects\OneTrainer-master\OneTrainer-master\venv\src\diffusers\.ai\AGENTS.md"),
         ]
+        # If the master target is global plugin or user home, purge workspace GEMINI.md duplicate as well
+        if self.master_protocol_file.resolve() != (self.workspace_root / "GEMINI.md").resolve():
+            self.duplicate_files_to_purge.append(self.workspace_root / "GEMINI.md")
+        # Purge root workspace AGENTS.md to avoid duplicate loading in Antigravity (global plugin handles it)
+        self.duplicate_files_to_purge.append(self.workspace_root / "AGENTS.md")
 
         self.assembler = DynamicPromptAssembler(workspace_root=self.workspace_root)
 
     def purge_duplicates(self) -> int:
         """Purges obsolete duplicate GEMINI.md and AGENTS.md files across workspaces."""
         purged = 0
+        protected_files = {
+            self.master_protocol_file.resolve(),
+            (Path.home() / ".gemini" / "config" / "plugins" / "vespera-overdrive" / "rules" / "AGENTS.md").resolve(),
+            (Path.home() / ".gemini" / "config" / "plugins" / "vespera-overdrive" / "rules" / "GEMINI.md").resolve(),
+            (Path.home() / ".gemini" / "config" / "AGENTS.md").resolve(),
+            (self.workspace_root / "docs" / "AGENTS.md").resolve(),
+        }
+
         for dup in self.duplicate_files_to_purge:
             try:
-                if dup.exists() and dup.resolve() != self.master_protocol_file.resolve():
-                    dup.unlink()
-                    print(f"[*] Purged duplicate protocol file: {dup}")
-                    purged += 1
+                if dup.exists():
+                    resolved = dup.resolve()
+                    if resolved not in protected_files:
+                        dup.unlink()
+                        print(f"[*] Purged duplicate protocol file: {dup}")
+                        purged += 1
             except Exception as e:
                 print(f"[-] Could not purge {dup}: {e}")
         return purged

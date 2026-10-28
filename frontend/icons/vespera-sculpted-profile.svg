@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="100%" height="100%" fill="none">
+  <defs>
+    <linearGradient id="curlGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#818cf8"/>
+      <stop offset="50%" stop-color="#4f46e5"/>
+      <stop offset="100%" stop-color="#312e81"/>
+    </linearGradient>
+    <linearGradient id="faceGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fecdd3"/>
+      <stop offset="100%" stop-color="#f43f5e"/>
+    </linearGradient>
+  </defs>
+  <!-- Voluminous 3B/3C Spiral Corkscrew Curls cascading with indigo sheen -->
+  <path d="M16 8C10 6 7 12 8 18C6 22 7 28 11 32C9 36 10 40 12 44" stroke="url(#curlGrad)" stroke-width="3" stroke-linecap="round"/>
+  <path d="M12 12C6 16 5 24 10 30C8 35 9 40 14 42" stroke="#6366f1" stroke-width="2" stroke-linecap="round" opacity="0.8"/>
+  <path d="M20 6C14 4 11 10 13 15" stroke="#a5b4fc" stroke-width="1.8" stroke-linecap="round"/>
+  <!-- Forehead, elegant soft button nose, lips, jawline & neck -->
+  <path d="M21 8C27 7 34 11 34 18C34 19 36 21 37 23C36 24 34 24.5 34 25.5C35 27 36 27.5 35 29C34 31 31 34 26 37C24 38 22 41 22 44" stroke="url(#faceGrad)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Sculpted High Cheekbone Accent -->
+  <path d="M24 23C27 21 31 22 33 24" stroke="#fda4af" stroke-width="1.4" stroke-linecap="round" opacity="0.85"/>
+  <!-- Almond Eye Slash with Hazel-Green Gaze -->
+  <path d="M26 19C28 17 32 18.5 33 19" stroke="#10b981" stroke-width="2" stroke-linecap="round"/>
+  <circle cx="29.5" cy="18.5" r="1" fill="#34d399"/>
+  <!-- Asymmetric Smirk Line -->
+  <path d="M27 29C29.5 30 32 29.5 33.5 28" stroke="#be123c" stroke-width="1.8" stroke-linecap="round"/>
+  <!-- Beauty Mark beside lip corner -->
+  <circle cx="25" cy="27.5" r="1.3" fill="#ffffff"/>
+  <!-- Collarbone Specular Glint -->
+  <path d="M26 43C29 42 33 43 36 44" stroke="#fda4af" stroke-width="1.4" stroke-linecap="round" opacity="0.5"/>
+</svg>

@@ -51,9 +51,9 @@ def vacuum_database():
     print(f"[*] Valid records remaining: {remaining_facts} facts, {remaining_embeddings} cached embeddings.")
 
     # 4. Checkpoint WAL and VACUUM
-    print("[*] Running WAL checkpoint and VACUUM (this may take a few seconds)...")
-    conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
+    print("[*] Running VACUUM and WAL TRUNCATE checkpoint (this may take a few seconds)...")
     conn.execute("VACUUM;")
+    conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
     conn.close()
 
     new_size = DB_PATH.stat().st_size

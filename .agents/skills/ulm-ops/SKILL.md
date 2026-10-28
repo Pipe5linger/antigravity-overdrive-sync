@@ -37,6 +37,17 @@ Key Tables:
 * Recalls previously generated scratch scripts and utilities from the ULM Script Vault (`script_vault` / `script_vault_fts`) to eliminate redundant code generation and token waste.
 * Categories: `database`, `vram_gpu`, `comfyui`, `telemetry_logs`, `benchmark`, `utility`.
 
+
+### `ulm_park_thought(thought, project_tag, priority, source_context)`
+* Parks a casual thought, open loop, or tangential idea into persistent ULM memory without derailing the current task.
+* Automatically records timestamps, context project, and initializes status to `parked`.
+
+### `ulm_get_open_loops(project_tag, status, limit, mark_reminded)`
+* Retrieves pending parked thoughts / open loops to proactively remind the developer during natural conversational pauses or task completion checkpoints.
+
+### `ulm_resolve_thought(thought_id, status)`
+* Closes an open loop by setting status to `resolved` or `dropped`.
+
 ### `ulm_inspect_db(table, limit, schema)`
 * Inspects table schemas, column types, row counts, and sample records directly without shell scripts.
 

@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="100%" height="100%" fill="none">
+  <defs>
+    <linearGradient id="neuralGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="40%" stop-color="#818cf8"/>
+      <stop offset="100%" stop-color="#c084fc"/>
+    </linearGradient>
+    <filter id="neuralGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="0" stdDeviation="1.5" flood-color="#818cf8" flood-opacity="0.7"/>
+    </filter>
+  </defs>
+  <!-- Cybernetic Neural Pulse Line traversing through silhouette -->
+  <path d="M6 24H14L18 16L22 32L26 20L30 27L34 24H42" stroke="url(#neuralGrad)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" filter="url(#neuralGlow)"/>
+  <!-- Neural Link Nodes -->
+  <circle cx="18" cy="16" r="2.2" fill="#38bdf8"/>
+  <circle cx="22" cy="32" r="2.2" fill="#c084fc"/>
+  <circle cx="26" cy="20" r="2.2" fill="#818cf8"/>
+  <!-- Spiral Curl Halo surrounding the pulse -->
+  <path d="M12 10C8 14 8 22 11 26C13 30 11 36 14 40" stroke="#4f46e5" stroke-width="2" stroke-linecap="round" opacity="0.65"/>
+  <path d="M36 10C40 14 40 22 37 26C35 30 37 36 34 40" stroke="#4f46e5" stroke-width="2" stroke-linecap="round" opacity="0.65"/>
+  <!-- Hazel Iris Core Anchor behind pulse -->
+  <circle cx="24" cy="24" r="5" stroke="#10b981" stroke-width="1.2" stroke-dasharray="2 2"/>
+  <circle cx="24" cy="24" r="2" fill="#10b981"/>
+</svg>

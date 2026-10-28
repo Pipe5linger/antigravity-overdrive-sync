@@ -26,6 +26,12 @@ class ULMEngine:
         self.llm_model: Optional[str] = llm_model
         self.vector_model: Optional[str] = vector_model
 
+    @property
+    def db_path(self) -> Path:
+        """Returns canonical SQLite database path."""
+        from core.database import get_canonical_db_path
+        return get_canonical_db_path()
+
     def load_existing_state(self) -> Dict[str, Any]:
         """Reads the current monolithic YAML database or returns an empty model."""
         if not os.path.exists(self.target_yaml):

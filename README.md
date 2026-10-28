@@ -149,4 +149,14 @@ While this system is actively used on my primary workstation and hardened agains
 
 If you spot something that could be written more cleanly, safely, or efficiently, please feel free to open an **Issue** or submit a **Pull Request**.
 
+---
+
+## 🤝 Community Contributors
+
+Special thanks to the developers helping make ULM stronger, more portable, and resilient across diverse environments:
+
+* **[@xcalibur73](https://github.com/xcalibur73)** — Cross-environment portability, Windows console stream resilience, and rule purge safeguards ([#2](https://github.com/Pipe5linger/antigravity-overdrive-sync/pull/2)).
+
+---
+
 Thanks for exploring the project!

@@ -29,6 +29,7 @@ class TestMemoryConsolidator(unittest.TestCase):
             conn.commit()
 
     def tearDown(self):
+        self.db.close_connection()
         os.close(self.db_fd)
         try:
             os.remove(self.db_path)

@@ -3,8 +3,31 @@
 let allSessions = [];
 let allFacts = [];
 let allProfileMetrics = [];
+window.ulmAuthToken = null;
 
-document.addEventListener('DOMContentLoaded', () => {
+async function authFetch(url, options = {}) {
+    if (!window.ulmAuthToken) {
+        try {
+            const tr = await fetch('/api/auth/token');
+            const td = await tr.json();
+            window.ulmAuthToken = td.token;
+        } catch (e) {
+            console.warn('Failed to fetch auth token:', e);
+        }
+    }
+    options.headers = options.headers || {};
+    if (window.ulmAuthToken) {
+        options.headers['X-ULM-Token'] = window.ulmAuthToken;
+    }
+    return fetch(url, options);
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+    try {
+        const tr = await fetch('/api/auth/token');
+        const td = await tr.json();
+        window.ulmAuthToken = td.token;
+    } catch(e) {}
     initNavigation();
     loadDashboardData();
     startLogPolling();
@@ -262,7 +285,7 @@ async function submitNewFact() {
     }
 
     try {
-        const res = await fetch('/api/facts', {
+        const res = await authFetch('/api/facts', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ fact: text, category: cat, confidence: conf })
@@ -381,7 +404,7 @@ async function savePreferences() {
 
     try {
         for (const p of pairs) {
-            await fetch('/api/preferences', {
+            await authFetch('/api/preferences', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(p)
@@ -426,7 +449,7 @@ async function triggerAction(actionType) {
     showToast(`Launching ${actionType} action...`);
 
     try {
-        const res = await fetch(`/api/actions/${actionType}`, { method: 'POST' });
+        const res = await authFetch(`/api/actions/${actionType}`, { method: 'POST' });
         const data = await res.json();
 
         if (res.ok) {

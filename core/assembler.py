@@ -194,16 +194,17 @@ class DynamicPromptAssembler:
 
     def get_semantic_environment_map(self) -> str:
         """Returns a dense, structured workstation topology map."""
+        user_home = str(Path.home())
         return (
             "- **Drive Partition Architecture**:\n"
-            "  - `C:\\` (System & OS): Windows host environment, user home (`C:\\Users\\boben`), `.gemini` runtime configs, and application scaffolding.\n"
+            f"  - `C:\\` (System & OS): Windows host environment, user home (`{user_home}`), `.gemini` runtime configs, and application scaffolding.\n"
             "  - `D:\\` (2TB WD_BLACK SN850X NVMe SSD — Virtual AI Data Center Workstation):\n"
             "    - `D:\\AI\\Projects`: Active core repositories (`antigravity-overdrive-sync`, `ComfyUI`, `command_center`, `ZIT_LoRA_Trainer`, `VA_Home_Loan`, etc.).\n"
             "    - `D:\\AI\\Models`: Local model weights, diffusion checkpoints (`D:\\AI\\Models\\StableDiffusion\\Checkpoints`), and LLM backbones.\n"
-            "    - `D:\\AI\\Outputs` & `C:\\Users\\boben\\Desktop\\Antigravity outputs`: Designated workstation export and generation paths.\n"
+            f"    - `D:\\AI\\Outputs` & `{user_home}\\Desktop\\Antigravity outputs`: Designated workstation export and generation paths.\n"
             "    - `D:\\Dev` & `D:\\Docker`: Development tools, container runtime environments, and sandbox services.\n"
             "  - `E:\\` (High-Capacity Archive): High-capacity cold storage, raw sequential datasets, and `E:\\_Sanctuary_Backups`.\n"
-            "  - `G:\\My Drive\\` & `C:\\Users\\boben\\Google Drive`: Google Drive desktop paths for living context docs and distilled archives (`Vespera_System_Context.*`, `Vespera_Memory_Archive.json`).\n"
+            f"  - `G:\\My Drive\\` & `{user_home}\\Google Drive`: Google Drive desktop paths for living context docs and distilled archives (`Vespera_System_Context.*`, `Vespera_Memory_Archive.json`).\n"
             "- **Compute & GPU Acceleration**:\n"
             "  - NVIDIA GeForce RTX 4070 (12GB VRAM) dedicated to high-speed local tensor computation and vision diffusion.\n"
             "- **Active Services & Local Web UI Endpoints**:\n"
@@ -342,15 +343,16 @@ class DynamicPromptAssembler:
         except Exception:
             pass
 
+        ws_root = str(self.workspace_root)
         memory_cortex_section = (
             "## 7. LONG-TERM MEMORY RETRIEVAL & HISTORICAL RECALL (ULM RAG CORTEX)\n"
             "When Bobby asks about past workflows, earlier script versions, architectural decisions, or historical facts:\n"
             "* **Semantic Vector Recall (Natural Language Search)**:\n"
-            "  Execute in terminal: `python D:\\AI\\Projects\\antigravity-overdrive-sync\\recall.py \"<natural language question>\"`\n"
-            "  *(Example: `python D:\\AI\\Projects\\antigravity-overdrive-sync\\recall.py \"how did we configure the comfyui api face swap?\"`)*\n"
+            f"  Execute in terminal: `python {ws_root}\\scripts\\generators_and_tools\\recall.py \"<natural language question>\"`\n"
+            f"  *(Example: `python {ws_root}\\scripts\\generators_and_tools\\recall.py \"how did we configure the comfyui api face swap?\"`)*\n"
             "* **Exact Full-Text Keyword Search (FTS5 BM25 Ranked)**:\n"
-            "  Execute in terminal: `python D:\\AI\\Projects\\antigravity-overdrive-sync\\main.py search -q \"<search term>\"`\n"
-            "  *(Example: `python D:\\AI\\Projects\\antigravity-overdrive-sync\\main.py search -q \"comfy_api_trigger\"`)*\n"
+            f"  Execute in terminal: `python {ws_root}\\main.py search -q \"<search term>\"`\n"
+            f"  *(Example: `python {ws_root}\\main.py search -q \"comfy_api_trigger\"`)*\n"
             "* **FastAPI Memory Endpoint**:\n"
             "  Query local REST endpoint at `http://127.0.0.1:8890/api/recall?q=<query>&limit=5`"
         )
@@ -543,7 +545,7 @@ class DynamicPromptAssembler:
                 conn.row_factory = sqlite3.Row
                 c = conn.cursor()
                 c.execute(
-                    "SELECT fact FROM facts ORDER BY confidence DESC, last_seen DESC LIMIT ?",
+                    "SELECT fact FROM facts WHERE (origin != 'agent_pending' OR origin IS NULL) ORDER BY confidence DESC, last_seen DESC LIMIT ?",
                     (limit,)
                 )
                 rows = c.fetchall()
@@ -555,7 +557,7 @@ class DynamicPromptAssembler:
                     conn.execute("PRAGMA busy_timeout = 5000;")
                     c = conn.cursor()
                     c.execute(
-                        "SELECT fact FROM facts ORDER BY confidence DESC, last_seen DESC LIMIT ?",
+                        "SELECT fact FROM facts WHERE (origin != 'agent_pending' OR origin IS NULL) ORDER BY confidence DESC, last_seen DESC LIMIT ?",
                         (limit,)
                     )
                     rows = c.fetchall()

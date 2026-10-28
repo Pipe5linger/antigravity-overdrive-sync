@@ -56,8 +56,9 @@ last_sync.txt
 # Token usage log
 token_usage_log.csv
 
-# Local workspace rule clones (master protocol is sovereign at ~/.gemini/GEMINI.md)
+# Local workspace rule clones (master protocol is sovereign at ~/.gemini/config/plugins/vespera-overdrive/rules/)
 GEMINI.md
+/AGENTS.md
 
 # Private Persona, Lore & Custom Handoff Briefs
 persona_baseline.yaml
@@ -66,7 +67,21 @@ vespera_physical_baseline.txt
 vespera_baseline_loader.py
 zit_isolated_benchmark.json
 scripts/generators_and_tools/seed_vespera_lore.py
+scripts/seed_vespera_lore.py
+scripts/youtube/
+scripts/launchers/
+scripts/sync_to_oss.py
+scripts/run_empirical_sweep.*
+scripts/monitor_lora_downloads.ps1
+lore/
+evidence/
+MP4
+desktop_icons/
+reddit_post.json
+scratch_*.txt
+workflows/
 HANDOFF*.md
 *.local.md
 rules/jeselnik_heuristics.md
+.vscode/
 

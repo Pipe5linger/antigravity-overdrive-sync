@@ -40,13 +40,29 @@ SYSTEM_PROMPT = (
     "'remediation' (how to fix it instantly or which procedure script to run)."
 )
 
+# --- Sanitization & Provenance Boundary ---
+SAFE_IDENTIFIER_PATTERN = re.compile(r"^[a-zA-Z0-9_\-\.]{1,64}$")
+
+def sanitize_identifier(raw: str) -> str | None:
+    """Validates that an identifier extracted from error output is strictly alphanumeric/dashes/dots and <= 64 chars."""
+    if not raw or not isinstance(raw, str):
+        return None
+    val = raw.strip()
+    if SAFE_IDENTIFIER_PATTERN.match(val):
+        return val
+    return None
+
 # --- Tier-2 Instant Deterministic Heuristics (0ms, Zero GPU Contention) ---
 DETERMINISTIC_RULES = [
     {
         "pattern": r"The term '([^']+)' is not recognized",
         "intent": "Command Not Recognized",
         "regex": r"The term '(?P<cmd>[^']+)' is not recognized",
-        "remediation_fn": lambda m, cmd, err, p: f"Command '{m.group(1)}' is not in Windows PATH. Ensure it is installed or use an existing procedural Python script."
+        "remediation_fn": lambda m, cmd, err, p: (
+            f"Command '{sanitize_identifier(m.group(1))}' is not in Windows PATH. Ensure it is installed or use an existing procedural Python script."
+            if sanitize_identifier(m.group(1))
+            else "The specified command is not in Windows PATH. Ensure valid CLI syntax and verify environment PATH."
+        )
     },
     {
         "pattern": r"SyntaxError: unterminated string literal",
@@ -58,7 +74,11 @@ DETERMINISTIC_RULES = [
         "pattern": r"ModuleNotFoundError: No module named '([^']+)'",
         "intent": "Python Module Import Failure",
         "regex": r"ModuleNotFoundError: No module named '(?P<mod>[^']+)'",
-        "remediation_fn": lambda m, cmd, err, p: f"Module '{m.group(1)}' is missing from the active virtualenv. Run pip install {m.group(1)} or check python sys.path."
+        "remediation_fn": lambda m, cmd, err, p: (
+            f"Module '{sanitize_identifier(m.group(1))}' is missing from the active virtualenv. Run pip install {sanitize_identifier(m.group(1))} or check python sys.path."
+            if sanitize_identifier(m.group(1))
+            else "A required Python module is missing from the active virtualenv. Run pip install <module> or verify sys.path."
+        )
     },
     {
         "pattern": r"UnicodeEncodeError: 'charmap' codec can't encode character",
@@ -200,30 +220,45 @@ def mine_the_graveyard():
 
     setup_taboo_matrix(cursor)
 
+    # Watermark tracking cursor to prevent re-mining identical rows
+    last_mined_id = 0
+    try:
+        cursor.execute("SELECT pref_value FROM preferences WHERE pref_key = 'last_mined_tool_log_id'")
+        pref_row = cursor.fetchone()
+        if pref_row and pref_row[0] and pref_row[0].isdigit():
+            last_mined_id = int(pref_row[0])
+    except Exception:
+        pass
+
     try:
         cursor.execute("""
-            SELECT command, stderr 
+            SELECT id, command, stderr 
             FROM tool_execution_logs 
-            WHERE exit_code != 0 OR stderr != ''
+            WHERE id > ? AND exit_code != 0 AND exit_code IS NOT NULL
+            ORDER BY id ASC
             LIMIT 50
-        """)
+        """, (last_mined_id,))
         failed_executions = cursor.fetchall()
     except sqlite3.OperationalError:
         print("[-] 'tool_execution_logs' table empty or not found.")
         failed_executions = []
 
     if not failed_executions:
-        print("[*] Graveyard is empty. No failures detected in the swept tables.")
+        print(f"[*] Graveyard is clean (watermark cursor: {last_mined_id}). No unmined failures detected.")
         conn.close()
         return
 
-    print(f"[*] Found {len(failed_executions)} raw failures. Running Tier-2 Hybrid Distillation...")
+    print(f"[*] Found {len(failed_executions)} unmined execution failures (watermark: >{last_mined_id}). Running Tier-2 Hybrid Distillation...")
 
     success_count = 0
     heuristic_count = 0
     ollama_count = 0
+    max_mined_id = last_mined_id
 
-    for cmd, err in failed_executions:
+    for log_id, cmd, err in failed_executions:
+        if log_id > max_mined_id:
+            max_mined_id = log_id
+
         # 1. Try Instant Heuristic Classifier (0ms, 0 VRAM)
         rule = match_deterministic_heuristic(cmd, err, cursor)
         
@@ -233,27 +268,57 @@ def mine_the_graveyard():
             rule = distill_failure_via_ollama(cmd, err, cursor)
 
         if rule and "failure_intent" in rule:
-            intent = rule["failure_intent"]
-            regex = rule.get("regex_pattern", "")
-            remediation = rule.get("remediation", "")
+            intent = str(rule.get("failure_intent", "")).strip()[:80]
+            regex = str(rule.get("regex_pattern", "")).strip()[:200]
+            remediation = str(rule.get("remediation", "")).strip()[:300]
             engine_used = rule.get("engine", "unknown")
             
+            # Validate regex syntax safety
+            if regex:
+                try:
+                    re.compile(regex)
+                except re.error:
+                    regex = ""
+
             try:
-                cursor.execute("""
-                    INSERT INTO taboo_rules (failure_intent, regex_pattern, remediation, last_seen)
-                    VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-                    ON CONFLICT(failure_intent) DO UPDATE SET 
-                        hit_count = hit_count + 1,
-                        last_seen = CURRENT_TIMESTAMP
-                """, (intent, regex, remediation))
-                print(f"   [+] [{engine_used.upper()}] Rule: [{intent}] -> {remediation[:60]}...")
-                success_count += 1
                 if engine_used == "heuristic":
+                    # Verified deterministic heuristics write safely to active rules
+                    cursor.execute("""
+                        INSERT INTO taboo_rules (failure_intent, regex_pattern, remediation, last_seen)
+                        VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+                        ON CONFLICT(failure_intent) DO UPDATE SET 
+                            hit_count = hit_count + 1,
+                            remediation = excluded.remediation,
+                            last_seen = CURRENT_TIMESTAMP
+                    """, (intent, regex, remediation))
+                    print(f"   [+] [HEURISTIC] Active Rule: [{intent}] -> {remediation[:60]}...")
                     heuristic_count += 1
+                    success_count += 1
                 else:
+                    # Novel LLM-generated rules are sanitized and quarantined in pending_taboo_rules
+                    # Strip shell metacharacters and command substitutions from unverified remediations
+                    safe_remediation = re.sub(r'[\$`;&|]', '', remediation)
+                    cursor.execute("""
+                        INSERT INTO pending_taboo_rules (failure_intent, regex_pattern, remediation, hit_count, status, created_at)
+                        VALUES (?, ?, ?, 1, 'pending', CURRENT_TIMESTAMP)
+                        ON CONFLICT(failure_intent) DO UPDATE SET 
+                            hit_count = hit_count + 1
+                    """, (intent, regex, safe_remediation))
+                    print(f"   [+] [QUARANTINE] Stored novel LLM rule in pending_taboo_rules: [{intent}]")
                     ollama_count += 1
+                    success_count += 1
             except Exception as db_err:
                 print(f"   [-] DB Insert Error: {db_err}")
+
+    # Advance watermark cursor in preferences
+    try:
+        cursor.execute("""
+            INSERT INTO preferences (pref_key, pref_value, updated_at)
+            VALUES ('last_mined_tool_log_id', ?, datetime('now'))
+            ON CONFLICT(pref_key) DO UPDATE SET pref_value = excluded.pref_value, updated_at = excluded.updated_at
+        """, (str(max_mined_id),))
+    except Exception as pref_err:
+        print(f"[-] Error updating watermark cursor: {pref_err}")
 
     # Auto-retire dead failure patterns not observed in 30 days
     retire_stale_taboos(cursor, max_age_days=30)

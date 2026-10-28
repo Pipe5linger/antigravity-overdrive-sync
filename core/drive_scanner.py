@@ -11,7 +11,7 @@ class DriveHierarchyScanner:
         r"E:\_Sanctuary_Backups",
         r"E:\Media_Server",
         r"G:\My Drive",
-        r"C:\Users\boben\.gemini\antigravity"
+        str(Path.home() / ".gemini" / "antigravity")
     ]
 
     def __init__(self, roots: List[str] = None):

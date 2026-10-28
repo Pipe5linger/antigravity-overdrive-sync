@@ -9,8 +9,10 @@ import datetime
 import requests
 import uvicorn
 from pathlib import Path
-from typing import Optional, List
-from fastapi import FastAPI, HTTPException, Query, BackgroundTasks
+from typing import Optional, List, Dict
+import secrets
+from urllib.parse import urlparse
+from fastapi import FastAPI, HTTPException, Query, BackgroundTasks, Request, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse, FileResponse
 from pydantic import BaseModel
@@ -20,6 +22,38 @@ from core.database import ULMDatabase
 from core.assembler import DynamicPromptAssembler
 
 app = FastAPI(title="Vespera ULM Control Center", version="2.0.0")
+
+# Security Configuration: Ephemeral Auth Token & DNS Rebinding Protection
+SERVER_AUTH_TOKEN = secrets.token_hex(16)
+token_file = Path(__file__).resolve().parent / "scratch" / ".web_session_token"
+try:
+    token_file.parent.mkdir(parents=True, exist_ok=True)
+    token_file.write_text(SERVER_AUTH_TOKEN, encoding="utf-8")
+except Exception:
+    pass
+
+ALLOWED_HOSTS = {"127.0.0.1", "localhost", "127.0.0.1:8890", "localhost:8890"}
+SENSITIVE_PREF_PATTERNS = {"key", "secret", "token", "password", "api_key", "credentials", "webhook"}
+
+def is_sensitive_key(k: str) -> bool:
+    k_lower = k.lower()
+    return any(p in k_lower for p in SENSITIVE_PREF_PATTERNS)
+
+@app.middleware("http")
+async def security_middleware(request: Request, call_next):
+    # 1. DNS Rebinding Defense: Validate Host Header
+    host = request.headers.get("host", "").lower()
+    if host and host not in ALLOWED_HOSTS:
+        return Response(content="Forbidden: Invalid Host header (DNS rebinding protection)", status_code=403)
+    
+    # 2. Strict Token Authentication on ALL state-mutating requests (No loopback bypass)
+    if request.method in ("POST", "PUT", "DELETE"):
+        if request.url.path not in ("/api/auth/token",):
+            token_hdr = request.headers.get("x-ulm-token") or request.query_params.get("token")
+            if token_hdr != SERVER_AUTH_TOKEN:
+                return Response(content="Forbidden: Invalid or missing X-ULM-Token header (CSRF / Rebinding Defense)", status_code=403)
+
+    return await call_next(request)
 
 # System Paths & Engine Setup
 engine = ULMEngine()
@@ -145,7 +179,7 @@ def get_facts(category: Optional[str] = None, project_tag: Optional[str] = None,
         with db.get_connection() as conn:
             conn.row_factory = sqlite3.Row
             c = conn.cursor()
-            query = "SELECT fact_id, fact, category, confidence, first_seen, last_seen, project_tag FROM facts WHERE 1=1"
+            query = "SELECT fact_id, fact, category, confidence, first_seen, last_seen, project_tag FROM facts WHERE (origin != 'agent_pending' OR origin IS NULL)"
             params = []
             
             if category:
@@ -187,6 +221,67 @@ def delete_fact(fact_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/facts/pending")
+def get_pending_facts():
+    """Returns all quarantined facts requiring human promotion."""
+    return {"pending_facts": db.get_pending_facts()}
+
+@app.post("/api/facts/{fact_id}/promote")
+def promote_fact_endpoint(fact_id: str):
+    """Explicitly promotes an agent_pending fact to user-verified Golden Truth."""
+    if db.promote_fact(fact_id):
+        add_web_log(f"[+] Promoted fact {fact_id[:8]} to immutable user fact.")
+        return {"status": "success", "fact_id": fact_id}
+    raise HTTPException(status_code=404, detail="Fact not found or promotion failed.")
+
+@app.post("/api/facts/{archive_id}/restore")
+def restore_fact_endpoint(archive_id: int):
+    """Restores a soft-archived fact back to the active facts table."""
+    if db.restore_fact(archive_id):
+        add_web_log(f"[+] Restored fact from archive ID {archive_id}.")
+        return {"status": "success", "archive_id": archive_id}
+    raise HTTPException(status_code=404, detail="Archived fact not found or restore failed.")
+
+@app.get("/api/taboo/pending")
+def get_pending_taboo_rules():
+    """Returns all quarantined LLM-distilled taboo rules awaiting approval."""
+    try:
+        with db.get_connection() as conn:
+            conn.row_factory = sqlite3.Row
+            c = conn.cursor()
+            c.execute("SELECT id, failure_intent, regex_pattern, remediation, hit_count, created_at FROM pending_taboo_rules WHERE status = 'pending' ORDER BY id DESC")
+            return {"pending_rules": [dict(r) for r in c.fetchall()]}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/taboo/{rule_id}/promote")
+def promote_taboo_rule(rule_id: int):
+    """Promotes a quarantined taboo rule to active enforcement."""
+    try:
+        with db.get_connection() as conn:
+            conn.row_factory = sqlite3.Row
+            c = conn.cursor()
+            c.execute("SELECT failure_intent, regex_pattern, remediation FROM pending_taboo_rules WHERE id = ?", (rule_id,))
+            rule = c.fetchone()
+            if not rule:
+                raise HTTPException(status_code=404, detail="Pending taboo rule not found.")
+            c.execute("""
+                INSERT INTO taboo_rules (failure_intent, regex_pattern, remediation, last_seen)
+                VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(failure_intent) DO UPDATE SET
+                    remediation = excluded.remediation,
+                    hit_count = hit_count + 1,
+                    last_seen = CURRENT_TIMESTAMP
+            """, (rule["failure_intent"], rule["regex_pattern"], rule["remediation"]))
+            c.execute("UPDATE pending_taboo_rules SET status = 'promoted' WHERE id = ?", (rule_id,))
+            conn.commit()
+        add_web_log(f"[+] Promoted taboo rule '{rule['failure_intent']}' to active matrix.")
+        return {"status": "success", "rule_id": rule_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/api/profile")
 def get_developer_profile(category: Optional[str] = None, project_tag: Optional[str] = None, search: Optional[str] = None, limit: int = 100):
     try:
@@ -214,6 +309,14 @@ def get_developer_profile(category: Optional[str] = None, project_tag: Optional[
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/auth/token")
+def get_auth_token(request: Request):
+    """Provides local browser UI with the ephemeral session token for state-mutating requests."""
+    sec_site = request.headers.get("sec-fetch-site")
+    if sec_site and sec_site.lower() == "cross-site":
+        raise HTTPException(status_code=403, detail="Forbidden: Cross-site token fetch rejected.")
+    return {"token": SERVER_AUTH_TOKEN}
+
 @app.get("/api/preferences")
 def get_preferences():
     try:
@@ -221,7 +324,15 @@ def get_preferences():
             conn.row_factory = sqlite3.Row
             c = conn.cursor()
             c.execute("SELECT pref_key, pref_value, updated_at FROM preferences")
-            prefs = {r["pref_key"]: r["pref_value"] for r in c.fetchall()}
+            prefs = {}
+            for r in c.fetchall():
+                k = r["pref_key"]
+                v = r["pref_value"]
+                # Finding #1 Fix: Redact API keys and secrets from unauthenticated API
+                if is_sensitive_key(k):
+                    prefs[k] = "********" if v else ""
+                else:
+                    prefs[k] = v
             return {"preferences": prefs}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -229,9 +340,47 @@ def get_preferences():
 @app.post("/api/preferences")
 def set_preference(payload: PreferencePayload):
     try:
+        # Protect against UI sending back masked asterisks and overwriting stored secrets
+        if is_sensitive_key(payload.key) and payload.value.strip() == "********":
+            return {"status": "unchanged", "key": payload.key, "value": "[REDACTED]"}
+
+        # Validate endpoint URLs against arbitrary remote exfiltration
+        if payload.key == "ollama_endpoint":
+            val = payload.value.strip()
+            if "\\" in val or "@" in val:
+                raise HTTPException(status_code=400, detail="Security error: Invalid characters ('\\' or '@') in Ollama URL.")
+            parsed = urlparse(val)
+            if not parsed.scheme or parsed.scheme not in ("http", "https"):
+                raise HTTPException(status_code=400, detail="Security error: Invalid URL scheme for Ollama endpoint.")
+            pinned_ollama = os.environ.get("ULM_OLLAMA_ENDPOINT")
+            if not parsed.hostname or parsed.hostname not in ("127.0.0.1", "localhost"):
+                if not pinned_ollama or val != pinned_ollama:
+                    raise HTTPException(status_code=400, detail="Security error: Local Ollama endpoint must point to loopback (127.0.0.1/localhost) or match pinned ULM_OLLAMA_ENDPOINT env var.")
+
+        if payload.key == "google_docs_webhook_url" and payload.value.strip():
+            val = payload.value.strip()
+            if "\\" in val or "@" in val:
+                raise HTTPException(status_code=400, detail="Security error: Invalid characters ('\\' or '@') in Webhook URL.")
+            parsed_wh = urlparse(val)
+            if not parsed_wh.scheme or parsed_wh.scheme not in ("http", "https"):
+                raise HTTPException(status_code=400, detail="Security error: Invalid URL scheme for Webhook.")
+            pinned_env = os.environ.get("ULM_GOOGLE_DOCS_WEBHOOK_URL")
+            allowed_domains = {"127.0.0.1", "localhost", "script.google.com", "script.googleusercontent.com"}
+            if not parsed_wh.hostname or (parsed_wh.hostname not in allowed_domains and not parsed_wh.hostname.endswith(".google.com")):
+                if not pinned_env or val != pinned_env:
+                    raise HTTPException(status_code=400, detail="Security error: Webhook destination must be Google Apps Script (script.google.com), loopback (127.0.0.1/localhost), or match pinned ULM_GOOGLE_DOCS_WEBHOOK_URL environment variable.")
+            elif parsed_wh.hostname in ("127.0.0.1", "localhost"):
+                # Restrict loopback webhooks to approved service ports
+                if parsed_wh.port and parsed_wh.port not in (8890, 8000, 8080, 5000, 9000):
+                    raise HTTPException(status_code=400, detail="Security error: Loopback webhook destination must be on an approved service port.")
+
         db.set_preference(payload.key, payload.value)
-        add_web_log(f"Preference updated: {payload.key} = {payload.value}")
-        return {"status": "success", "key": payload.key, "value": payload.value}
+        # Redact secret values from event logs buffer
+        logged_val = "[REDACTED]" if is_sensitive_key(payload.key) else payload.value
+        add_web_log(f"Preference updated: {payload.key} = {logged_val}")
+        return {"status": "success", "key": payload.key, "value": "[REDACTED]" if is_sensitive_key(payload.key) else payload.value}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -354,14 +503,30 @@ def semantic_recall_endpoint(q: str = Query(...), limit: int = Query(5), min_sim
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+def flush_and_exit_server(delay: float = 0.5):
+    """Flushes SQLite WAL checkpoints cleanly and signals process shutdown."""
+    def _worker():
+        time.sleep(delay)
+        try:
+            with db.get_connection() as conn:
+                conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
+                conn.commit()
+            db.close()
+        except Exception:
+            pass
+        import signal
+        try:
+            os.kill(os.getpid(), signal.SIGTERM)
+        except Exception:
+            os._exit(0)
+    threading.Thread(target=_worker, daemon=True).start()
+
 @app.post("/api/actions/shutdown")
 def shutdown_webui_server():
-    """Shuts down the ULM WebUI server process cleanly."""
-    def _kill():
-        time.sleep(1)
-        os._exit(0)
-    threading.Thread(target=_kill, daemon=True).start()
-    return {"status": "success", "message": "ULM WebUI server shutting down..."}
+    """Shuts down the ULM WebUI server process cleanly, flushing WAL checkpoints first."""
+    add_web_log("[+] WAL checkpointing and terminating server process...")
+    flush_and_exit_server(delay=0.5)
+    return {"status": "success", "message": "ULM WebUI server flushing WAL and shutting down..."}
 
 _sync_thread_running = False
 _sync_lock = threading.Lock()
@@ -381,9 +546,8 @@ def trigger_sync(background_tasks: BackgroundTasks, auto_shutdown: bool = Query(
         try:
             run_sync_task()
             if auto_shutdown:
-                add_web_log("[+] Auto-shutdown enabled: Shutting down ULM server process in 3s...")
-                time.sleep(3)
-                os._exit(0)
+                add_web_log("[+] Auto-shutdown enabled: Checkpointing WAL and exiting in 2s...")
+                flush_and_exit_server(delay=2.0)
         finally:
             with _sync_lock:
                 _sync_thread_running = False
@@ -461,7 +625,7 @@ def serve_latest_comfy_output():
     candidate_dirs = [
         Path(r"D:\AI\Projects\ComfyUI\output"),
         Path(r"D:\AI\Outputs"),
-        Path(r"C:\Users\boben\Desktop\Antigravity outputs"),
+        Path.home() / "Desktop" / "Antigravity outputs",
         Path(r"D:\AI\Antigravity outputs")
     ]
     valid_exts = {".png", ".jpg", ".jpeg", ".webp"}

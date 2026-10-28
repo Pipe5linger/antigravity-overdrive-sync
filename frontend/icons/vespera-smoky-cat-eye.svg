@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="100%" height="100%" fill="none">
+  <defs>
+    <radialGradient id="catIris" cx="45%" cy="45%" r="55%">
+      <stop offset="0%" stop-color="#fef08a"/>
+      <stop offset="25%" stop-color="#10b981"/>
+      <stop offset="65%" stop-color="#047857"/>
+      <stop offset="100%" stop-color="#022c22"/>
+    </radialGradient>
+    <linearGradient id="wingGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#18181b"/>
+      <stop offset="85%" stop-color="#09090b"/>
+      <stop offset="100%" stop-color="#e11d48"/>
+    </linearGradient>
+  </defs>
+  <!-- Extended sultry wing stroke extending outward -->
+  <path d="M4 25C10 14 32 12 42 16L47 11C44 18 41 22 38 24C31 32 12 33 4 25Z" fill="#18181b" opacity="0.4"/>
+  <!-- Sharp Winged Kohl Line -->
+  <path d="M3 25C9 14 31 12 41 16L47 11C43 18 40 21 37 23C30 30 11 31 3 25Z" stroke="url(#wingGrad)" stroke-width="2.2" stroke-linejoin="round"/>
+  <!-- Upper Thick Kohl Lash -->
+  <path d="M4 25C12 15 32 14 41 16" stroke="#09090b" stroke-width="3.5" stroke-linecap="round"/>
+  <!-- Lower tightline with soft smoke -->
+  <path d="M7 26C14 32 30 31 37 23" stroke="#e11d48" stroke-width="1.6" stroke-linecap="round" opacity="0.85"/>
+  <!-- Piercing Cat-Eye Hazel Iris -->
+  <circle cx="23" cy="23.5" r="7.8" fill="url(#catIris)" stroke="#047857" stroke-width="1"/>
+  <!-- Slit-like yet natural deep pupil -->
+  <ellipse cx="23" cy="23.5" rx="3.2" ry="4.5" fill="#09090b"/>
+  <!-- Starburst Catchlights -->
+  <circle cx="24.8" cy="21.5" r="1.5" fill="#ffffff"/>
+  <circle cx="21" cy="25" r="0.7" fill="#ffffff" opacity="0.8"/>
+  <!-- Arching Brow Whisper -->
+  <path d="M8 12C17 7 31 8 40 13" stroke="#e4e4e7" stroke-width="1.5" stroke-linecap="round" opacity="0.4"/>
+</svg>

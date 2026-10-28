@@ -32,6 +32,7 @@ class TestDynamicPromptAssembler(unittest.TestCase):
         self.assembler = DynamicPromptAssembler(self.db_path, workspace_root=self.workspace_root)
 
     def tearDown(self):
+        self.db.close_connection()
         os.close(self.db_fd)
         try:
             os.remove(self.db_path)

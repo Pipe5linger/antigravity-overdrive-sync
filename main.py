@@ -90,8 +90,10 @@ def backup_sqlite_to_yaml(db, engine):
         print(f"[-] Error during backup: {e}")
 
 def check_conflicting_workloads(ports=(8188, 7860)):
-    """Check if any generation pipelines (ComfyUI on 8188, Forge on 7860) are currently active."""
+    """Check if any generation pipelines (ComfyUI on 8188, Forge on 7860) or active GPU workloads are active."""
     import socket
+    import shutil
+    import subprocess
     active = {}
     port_names = {8188: "ComfyUI Pipeline", 7860: "Stable Diffusion Forge"}
     for port in ports:
@@ -102,6 +104,21 @@ def check_conflicting_workloads(ports=(8188, 7860)):
                     active[port] = port_names.get(port, f"Port {port}")
         except Exception:
             pass
+
+    # Inspect real-time VRAM allocation via nvidia-smi to protect LoRA bakes and tensor runs
+    smi_bin = shutil.which("nvidia-smi")
+    if smi_bin:
+        try:
+            cmd = [smi_bin, "--query-gpu=memory.used", "--format=csv,noheader,nounits"]
+            res = subprocess.run(cmd, capture_output=True, text=True, timeout=2)
+            if res.returncode == 0:
+                used_vram = int(res.stdout.strip().splitlines()[0])
+                # If more than 2500 MB VRAM is allocated, GPU is actively computing (e.g. ai-toolkit training)
+                if used_vram > 2500:
+                    active["gpu_vram"] = f"Active GPU Workload ({used_vram} MB VRAM allocated)"
+        except Exception:
+            pass
+
     return active
 
 def main():

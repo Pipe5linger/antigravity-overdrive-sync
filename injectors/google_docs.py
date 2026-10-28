@@ -3,6 +3,10 @@ import json
 import datetime
 import requests
 from pathlib import Path
+from dotenv import load_dotenv
+
+load_dotenv()
+
 from injectors.base import BaseInjector
 from core.assembler import DynamicPromptAssembler
 

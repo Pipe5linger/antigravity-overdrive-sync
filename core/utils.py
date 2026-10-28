@@ -136,3 +136,45 @@ def shutdown_ollama(endpoint="http://localhost:11434", log_callback=None):
         log("[+] Ollama server process terminated.")
     except Exception as e:
         log(f"[-] Failed to terminate Ollama process: {e}")
+
+
+SECRET_PATTERNS = [
+    # Google Gemini API keys
+    r'AIza[0-9A-Za-z-_]{35}',
+    # OpenAI / Anthropic keys
+    r'sk-[A-Za-z0-9-_]{20,}',
+    # Stripe live secret keys
+    r'sk_live_[0-9a-zA-Z]{24,}',
+    # AWS access key IDs
+    r'AKIA[0-9A-Z]{16}',
+    # Slack bot/user tokens
+    r'xox[baprs]-[0-9a-zA-Z-]{10,}',
+    # Hugging Face tokens
+    r'hf_[a-zA-Z0-9]{34,}',
+    # GitHub personal access tokens
+    r'gh[pousr]_[A-Za-z0-9_]{36,}',
+    # JSON Web Tokens (JWT)
+    r'eyJ[a-zA-Z0-9_-]{10,}\.eyJ[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}',
+    # Private Key blocks
+    r'-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----',
+    # URLs with embedded username:password
+    r'https?://[^:\s]+:[^@\s]+@[^\s]+',
+    # Generic config assignment lines (e.g. API_KEY='...', password="...")
+    r'(?i)(?:password|api_key|secret|token)\s*=\s*[\'"][^\'"]{8,}[\'"]',
+    # Unquoted assignment lines (e.g. API_KEY=xyz12345678)
+    r'(?i)(?:password|api_key|secret|token)\s*=\s*[^\s\'"]{8,}',
+    # JSON property secret assignments (e.g. "password": "...", "api_key": "...")
+    r'(?i)"(?:password|api_key|secret|token)"\s*:\s*"[^"]{8,}"',
+    # Generic bearer / auth header tokens
+    r'(?i)(?:bearer\s+|token\s+|api_key\s*=\s*)[A-Za-z0-9_\-\.]{24,}'
+]
+
+def scrub_secrets(text: str) -> str:
+    """Scrubs sensitive API keys, auth tokens, and credentials from text before logging or storing."""
+    if not text or not isinstance(text, str):
+        return text
+    import re
+    scrubbed = text
+    for pat in SECRET_PATTERNS:
+        scrubbed = re.sub(pat, '[REDACTED_SECRET]', scrubbed)
+    return scrubbed

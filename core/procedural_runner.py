@@ -1,5 +1,7 @@
 import os
 import sys
+import json
+import hashlib
 import subprocess
 import datetime
 from pathlib import Path
@@ -12,23 +14,26 @@ if sys.platform.startswith("win"):
     except AttributeError:
         pass
 
-from core.database import ULMDatabase
+from core.database import ULMDatabase, get_canonical_db_path
 from core.engine import ULMEngine
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_DB_PATH = os.environ.get("ULM_DB_PATH", str(PROJECT_ROOT / "db" / "sync_state.db"))
+DEFAULT_DB_PATH = Path(os.environ.get("ULM_DB_PATH", str(get_canonical_db_path())))
+DEFAULT_MANIFEST_PATH = PROJECT_ROOT / "config" / "playbooks_manifest.json"
 
 class ProceduralRunner:
-    def __init__(self, db_path=None):
-        if not db_path:
-            try:
-                engine = ULMEngine()
-                db_path = str(Path(engine.target_yaml).with_suffix(".db"))
-            except Exception:
-                db_path = DEFAULT_DB_PATH
-        self.db_path = db_path
-        self.db = ULMDatabase(self.db_path)
-        self.db.initialize_db()
+    def __init__(self, db_path=None, manifest_path=None):
+        self.manifest_path = Path(manifest_path) if manifest_path else DEFAULT_MANIFEST_PATH
+        if isinstance(db_path, ULMDatabase):
+            self.db = db_path
+            self.db_path = str(db_path.db_path)
+        else:
+            if not db_path:
+                self.db_path = str(DEFAULT_DB_PATH)
+            else:
+                self.db_path = str(db_path)
+            self.db = ULMDatabase(self.db_path)
+            self.db.initialize_db()
 
     def execute_node(self, node_id, dry_run=False):
         """Executes a single procedure node and records its status in SQLite."""
@@ -51,16 +56,123 @@ class ProceduralRunner:
             self.db.update_procedure_status(node_id, "SUCCESS")
             return True, 0, "No command executed"
 
-        # Determine how to run target
+        # Determine how to run target safely
+        import shlex
         cmd = target.strip().replace(r'\"', '"')
-        cwd = r"D:\AI\Projects\antigravity-overdrive-sync"
+        cwd = PROJECT_ROOT
 
         try:
-            # Execute command
+            tokens = shlex.split(cmd, posix=False)
+            if not tokens:
+                return True, 0, "Empty command"
+
+            # Strict Binary Allowlist: Only approved Python runtimes are permitted
+            first_token = tokens[0].lower()
+            if first_token.endswith(".exe"):
+                first_token = first_token[:-4]
+
+            if first_token not in ("python", "python3", "py"):
+                err_msg = f"Security sandbox violation: Execution of non-Python binary '{tokens[0]}' is prohibited."
+                print(f"  [-] {err_msg}")
+                self.db.update_procedure_status(node_id, "ERROR: Security Sandbox Rejection")
+                return False, -1, err_msg
+
+            # Target must specify a script argument
+            if len(tokens) < 2:
+                err_msg = "Security sandbox violation: No script target provided."
+                print(f"  [-] {err_msg}")
+                self.db.update_procedure_status(node_id, "ERROR: Security Sandbox Rejection")
+                return False, -1, err_msg
+
+            # Inline code execution or interpreter flags (-c, -m, etc.) are prohibited; target must be an audited file on disk
+            if tokens[1].startswith("-"):
+                err_msg = f"Security sandbox violation: Flag '{tokens[1]}' is prohibited. Target must be an audited script file under project root."
+                print(f"  [-] {err_msg}")
+                self.db.update_procedure_status(node_id, "ERROR: Security Sandbox Rejection")
+                return False, -1, err_msg
+
+            tokens[0] = sys.executable
+            script_candidate = Path(tokens[1])
+            if not script_candidate.is_absolute():
+                script_candidate = (PROJECT_ROOT / script_candidate).resolve()
+            else:
+                script_candidate = script_candidate.resolve()
+            
+            # Ensure script is strictly inside project root and inspected relative to it
+            try:
+                rel_parts = script_candidate.relative_to(PROJECT_ROOT).parts
+            except ValueError:
+                err_msg = f"Security sandbox violation: Script path '{script_candidate}' is outside project root."
+                print(f"  [-] {err_msg}")
+                self.db.update_procedure_status(node_id, "ERROR: Security Sandbox Rejection")
+                return False, -1, err_msg
+
+            # Ensure script is strictly inside vetted procedural script directories
+            approved_dirs = [
+                (PROJECT_ROOT / "scripts" / "playbooks").resolve(),
+            ]
+            disallowed_names = {"scratch", "tmp", "temp", "node_modules", ".git"}
+            
+            if any(part.lower() in disallowed_names for part in rel_parts):
+                err_msg = f"Security sandbox violation: Execution from unvetted directory '{script_candidate}' is prohibited."
+                print(f"  [-] {err_msg}")
+                self.db.update_procedure_status(node_id, "ERROR: Security Sandbox Rejection")
+                return False, -1, err_msg
+
+            is_in_approved = False
+            for app_dir in approved_dirs:
+                try:
+                    script_candidate.relative_to(app_dir)
+                    is_in_approved = True
+                    break
+                except ValueError:
+                    continue
+
+            if not is_in_approved:
+                err_msg = f"Security sandbox violation: Script path '{script_candidate}' is not in an approved procedural playbook directory."
+                print(f"  [-] {err_msg}")
+                self.db.update_procedure_status(node_id, "ERROR: Security Sandbox Rejection")
+                return False, -1, err_msg
+            
+            if not script_candidate.exists() or not script_candidate.is_file():
+                err_msg = f"Procedure target script not found: '{script_candidate}'"
+                print(f"  [-] {err_msg}")
+                self.db.update_procedure_status(node_id, "FAILED: Script Not Found")
+                return False, -1, err_msg
+
+            # Cryptographic SHA-256 manifest verification (strictly fail-closed)
+            manifest_path = getattr(self, "manifest_path", None) or DEFAULT_MANIFEST_PATH
+            if not manifest_path.exists():
+                err_msg = f"Security sandbox violation: Playbooks manifest '{manifest_path}' is missing (fail-closed)."
+                print(f"  [-] {err_msg}")
+                self.db.update_procedure_status(node_id, "ERROR: Security Sandbox Rejection")
+                return False, -1, err_msg
+
+            try:
+                with open(manifest_path, "r", encoding="utf-8") as mf:
+                    manifest = json.load(mf)
+                with open(script_candidate, "rb") as sf:
+                    actual_hash = hashlib.sha256(sf.read()).hexdigest()
+                expected_hash = manifest.get(script_candidate.name) or manifest.get(str(script_candidate.relative_to(PROJECT_ROOT)).replace("\\", "/"))
+                if not expected_hash or expected_hash != actual_hash:
+                    err_msg = f"Security sandbox violation: Cryptographic checksum mismatch for script '{script_candidate.name}'."
+                    print(f"  [-] {err_msg}")
+                    self.db.update_procedure_status(node_id, "ERROR: Security Sandbox Rejection")
+                    return False, -1, err_msg
+            except Exception as me:
+                if "Security sandbox violation" in str(me):
+                    return False, -1, str(me)
+                err_msg = f"Security sandbox violation: Failed verifying script manifest: {me}"
+                print(f"  [-] {err_msg}")
+                self.db.update_procedure_status(node_id, "ERROR: Security Sandbox Rejection")
+                return False, -1, err_msg
+            
+            # Execute command safely without shell invocation, enforcing -I (Isolated mode) to prevent sys.path stdlib shadowing
+            exec_tokens = [sys.executable, "-I", str(script_candidate)] + tokens[2:]
             proc_exec = subprocess.run(
-                cmd,
-                shell=True,
-                cwd=cwd,
+                exec_tokens,
+                shell=False,
+                cwd=str(cwd),
                 capture_output=True,
                 text=True,
                 encoding="utf-8",
@@ -107,8 +219,42 @@ class ProceduralRunner:
                 # Try generic edge if no explicit success/failure edge
                 next_procs = self.db.get_next_procedures(current_node_id)
 
+            chosen_node = None
             if next_procs:
-                next_node = next_procs[0]
+                for candidate in next_procs:
+                    cond = candidate.get("condition_logic")
+                    if cond:
+                        cond_clean = cond.strip().lower()
+                        if cond_clean == "on_success":
+                            if not success:
+                                continue
+                        elif cond_clean == "on_failure":
+                            if success:
+                                continue
+                        elif "exit_code" in cond_clean:
+                            try:
+                                if "==" in cond_clean and int(cond_clean.split("==")[-1].strip()) != code:
+                                    continue
+                                elif "!=" in cond_clean and int(cond_clean.split("!=")[-1].strip()) == code:
+                                    continue
+                                else:
+                                    continue  # Fail closed on unknown syntax
+                            except Exception:
+                                continue  # Fail closed on parse error
+                        elif "==" in cond_clean:
+                            target_val = cond_clean.split("==")[-1].strip()
+                            if target_val == "true" and not success:
+                                continue
+                            elif target_val == "false" and success:
+                                continue
+                        else:
+                            # Fail closed on unparseable conditions
+                            continue
+                    chosen_node = candidate
+                    break
+
+            if chosen_node:
+                next_node = chosen_node
                 edge_label = next_node.get("relation_type", "TRANSITION")
                 print(f"\n  🔀 Traversal Edge: [{current_node_id}] --({edge_label})--> [{next_node['node_id']}]")
                 current_node_id = next_node["node_id"]
@@ -122,7 +268,7 @@ class ProceduralRunner:
         return visited
 
     def seed_production_workflows(self):
-        """Seeds the 3 core production workflows into SQLite."""
+        """Seeds the 3 core production workflows into SQLite using strictly audited script files."""
         print("[*] Seeding Core Production Workflows into Procedural Graph...")
 
         # ---------------------------------------------------------------------
@@ -131,21 +277,21 @@ class ProceduralRunner:
         self.db.add_procedure(
             node_id="comfyui_vram_guard",
             action_name="Pre-Flight VRAM & Workload Guard",
-            target_script_path=r"python scripts/generators_and_tools/vram_guard.py",
+            target_script_path=r"python scripts/playbooks/procedure_helpers.py vram_guard",
             expected_outcome="Verify ComfyUI readiness & ensure Ollama VRAM is evacuated",
             last_execution_status="READY"
         )
         self.db.add_procedure(
             node_id="comfyui_queue_inject",
             action_name="Inject Batch to ComfyUI API",
-            target_script_path=r"python -c \"import requests; r=requests.get('http://127.0.0.1:8188/system_stats', timeout=2); print('ComfyUI VRAM Free:', r.json().get('devices',[{}])[0].get('vram_free'))\"",
+            target_script_path=r"python scripts/playbooks/procedure_helpers.py comfyui_vram",
             expected_outcome="Confirm 127.0.0.1:8188 responds and has VRAM headroom",
             last_execution_status="READY"
         )
         self.db.add_procedure(
             node_id="comfyui_recovery_fallback",
             action_name="ComfyUI VRAM Recovery & Zombie Cleanup",
-            target_script_path=r"python -c \"from core.utils import shutdown_ollama; shutdown_ollama()\"",
+            target_script_path=r"python scripts/playbooks/procedure_helpers.py evict_ollama",
             expected_outcome="Purge Ollama VRAM and reset GPU memory for RTX 4070",
             last_execution_status="READY"
         )
@@ -161,28 +307,28 @@ class ProceduralRunner:
         self.db.add_procedure(
             node_id="harvest_poll_renders",
             action_name="Poll Dataset Image Output Directory",
-            target_script_path=r"python -c \"import os; p=r'D:\AI\Projects\ComfyUI\output\dataset_images'; print('Render dir exists:', os.path.isdir(p))\"",
+            target_script_path=r"python scripts/playbooks/procedure_helpers.py check_render_dir",
             expected_outcome="Confirm existence of output dataset folder",
             last_execution_status="READY"
         )
         self.db.add_procedure(
             node_id="harvest_run_organizer",
             action_name="Run Harvest Curation & Aspect Ratio Audit",
-            target_script_path=r"python scripts/generators_and_tools/curate_harvest.py",
+            target_script_path=r"python scripts/playbooks/procedure_helpers.py curate_harvest",
             expected_outcome="Validate image integrity, resolutions, and quarantine anomalies",
             last_execution_status="READY"
         )
         self.db.add_procedure(
             node_id="harvest_quarantine_fallback",
             action_name="Harvest Anomaly Quarantine Notification",
-            target_script_path=r"python -c \"print('[!] Anomaly detected: Corrupted renders flagged in _quarantine subfolder.')\"",
+            target_script_path=r"python scripts/playbooks/procedure_helpers.py notify_quarantine",
             expected_outcome="Quarantine flagged files without halting downstream jobs",
             last_execution_status="READY"
         )
         self.db.add_procedure(
             node_id="harvest_stage_complete",
             action_name="Harvest Curation Complete & Staged",
-            target_script_path=r"python -c \"print('[+] All harvest images validated and staged for ZIT training.')\"",
+            target_script_path=r"python scripts/playbooks/procedure_helpers.py notify_complete",
             expected_outcome="Confirm clean dataset ready for training or review",
             last_execution_status="READY"
         )
@@ -198,21 +344,21 @@ class ProceduralRunner:
         self.db.add_procedure(
             node_id="ulm_sync_ingest",
             action_name="ULM Sync Log Ingestion",
-            target_script_path=r"python main.py sync --force",
+            target_script_path=r"python scripts/playbooks/procedure_helpers.py sync_ingest",
             expected_outcome="Parse newly modified transcripts into SQLite with WAL mode",
             last_execution_status="READY"
         )
         self.db.add_procedure(
             node_id="ulm_profile_facts",
             action_name="Memory Fact Consolidation & Profile Evaluation",
-            target_script_path=r"python -c \"from core.database import ULMDatabase; db=ULMDatabase(r'D:\AI\Projects\antigravity-overdrive-sync\db\sync_state.db'); print('Total facts:', len(db.get_facts(100)))\"",
+            target_script_path=r"python scripts/playbooks/procedure_helpers.py count_facts",
             expected_outcome="Extract active profile metrics and deduplicate facts",
             last_execution_status="READY"
         )
         self.db.add_procedure(
             node_id="ulm_vram_evict",
             action_name="Post-Sync Ollama VRAM Eviction",
-            target_script_path=r"python -c \"from core.utils import shutdown_ollama; shutdown_ollama()\"",
+            target_script_path=r"python scripts/playbooks/procedure_helpers.py evict_ollama",
             expected_outcome="Purge Ollama VRAM models to release GPU back to ComfyUI",
             last_execution_status="READY"
         )
@@ -227,21 +373,21 @@ class ProceduralRunner:
         self.db.add_procedure(
             node_id="wf_integrity_scan",
             action_name="ComfyUI Workflow Integrity & Link Audit",
-            target_script_path=r"python scripts/generators_and_tools/audit_workflow_json.py",
+            target_script_path=r"python scripts/playbooks/procedure_helpers.py audit_workflow_json",
             expected_outcome="Scan workflow JSONs for duplicate link IDs and missing nodes",
             last_execution_status="READY"
         )
         self.db.add_procedure(
             node_id="wf_stage_validated",
             action_name="Stage Validated ComfyUI Workflows",
-            target_script_path=r"python -c \"print('[+] All audited ComfyUI workflows verified and ready for rendering.')\"",
+            target_script_path=r"python scripts/playbooks/procedure_helpers.py notify_wf_staged",
             expected_outcome="Confirm zero link collision risks before dispatching queues",
             last_execution_status="READY"
         )
         self.db.add_procedure(
             node_id="wf_repair_warning",
             action_name="Workflow Link Corruption Alert",
-            target_script_path=r"python -c \"print('[!] Anomaly flagged: Review workflow JSON links before loading in browser.')\"",
+            target_script_path=r"python scripts/playbooks/procedure_helpers.py notify_wf_repair",
             expected_outcome="Halt queue dispatch if JSON corruption detected",
             last_execution_status="READY"
         )
@@ -256,14 +402,14 @@ class ProceduralRunner:
         self.db.add_procedure(
             node_id="sanctuary_port_audit",
             action_name="Sanctuary Multi-Service Mesh Audit",
-            target_script_path=r"python scripts/generators_and_tools/sanctuary_health.py",
+            target_script_path=r"python scripts/playbooks/procedure_helpers.py sanctuary_health",
             expected_outcome="Audit live state of ComfyUI, ULM, KoboldCpp, and Ollama ports",
             last_execution_status="READY"
         )
         self.db.add_procedure(
             node_id="sanctuary_ready_signal",
             action_name="Sanctuary Service Mesh Operational",
-            target_script_path=r"python -c \"print('[+] Sanctuary service mesh validated. Local workstation online.')\"",
+            target_script_path=r"python scripts/playbooks/procedure_helpers.py notify_sanctuary_ready",
             expected_outcome="Confirm operational readiness of the local AI center",
             last_execution_status="READY"
         )
@@ -277,14 +423,14 @@ class ProceduralRunner:
         self.db.add_procedure(
             node_id="render_meta_extract",
             action_name="Extract Latest Render Generation Metadata",
-            target_script_path=r"python scripts/generators_and_tools/inspect_latest_render.py",
+            target_script_path=r"python scripts/playbooks/procedure_helpers.py notify_render_archived",
             expected_outcome="Read PNG metadata, seed, and active LoRA stack strengths",
             last_execution_status="READY"
         )
         self.db.add_procedure(
             node_id="render_meta_archived",
             action_name="Log Generation Recipe to Cortex",
-            target_script_path=r"python -c \"print('[+] Generation parameters and LoRA recipes verified.')\"",
+            target_script_path=r"python scripts/playbooks/procedure_helpers.py notify_render_archived",
             expected_outcome="Archive prompt parameters for reproducible training bakes",
             last_execution_status="READY"
         )

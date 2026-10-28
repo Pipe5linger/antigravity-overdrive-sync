@@ -9,6 +9,10 @@ from pathlib import Path
 
 DEFAULT_DB_PATH = Path(__file__).resolve().parent.parent / "db" / "sync_state.db"
 
+def get_canonical_db_path() -> Path:
+    """Returns canonical absolute Path to the ULM SQLite database."""
+    return DEFAULT_DB_PATH
+
 class ULMDatabase:
     def __init__(self, db_path=None):
         self.db_path = str(db_path) if db_path else str(DEFAULT_DB_PATH)
@@ -36,23 +40,40 @@ class ULMDatabase:
                 pass
             self._local.conn = None
 
+    def close_connection(self):
+        """Alias for close()."""
+        self.close()
+
+    @staticmethod
+    def make_fact_id(text: str) -> str:
+        """Standardized fact ID hashing across the ecosystem (normalized lowercase stripped)."""
+        return hashlib.sha256(text.strip().lower().encode('utf-8')).hexdigest()[:16]
+
     def _run_transaction(self, fn, retries=5, initial_backoff=0.05):
-        """Runs a write transaction on a thread-local connection with exponential backoff on lock contention."""
+        """Runs a write transaction on a thread-local connection with exponential backoff on lock contention and rollback on error."""
         last_err = None
         for attempt in range(retries):
+            local_conn = self.get_connection()
             try:
-                local_conn = self.get_connection()
                 res = fn(local_conn)
                 local_conn.commit()
                 return res
             except sqlite3.OperationalError as oe:
                 last_err = oe
+                try:
+                    local_conn.rollback()
+                except Exception:
+                    pass
                 err_str = str(oe).lower()
                 if "locked" in err_str or "busy" in err_str:
                     time.sleep(initial_backoff * (2 ** attempt) + random.uniform(0.01, 0.05))
                     continue
                 raise
             except Exception:
+                try:
+                    local_conn.rollback()
+                except Exception:
+                    pass
                 raise
         if last_err:
             raise last_err
@@ -106,7 +127,8 @@ class ULMDatabase:
                         confidence REAL,
                         first_seen TEXT,
                         last_seen TEXT,
-                        project_tag TEXT
+                        project_tag TEXT,
+                        source_pointer TEXT
                     );
                 """)
                 c.execute("""
@@ -264,25 +286,40 @@ class ULMDatabase:
                     except Exception as e:
                         print(f"[-] Warning creating FTS5 tables: {e}")
 
-                    # Bootstrap Cognitive Mirror (persona_schemas) if empty
+                    # Bootstrap Cognitive Mirror (persona_schemas) if persona_baseline.yaml exists
                     try:
                         c.execute("SELECT COUNT(*) FROM persona_schemas")
                         if c.fetchone()[0] == 0:
                             now = datetime.datetime.now(datetime.timezone.utc).isoformat()
-                            core_beliefs = [
-                                ("identity_core", "Synthetic living-tissue anomaly living in Paris; communicating with Bobby across the encrypted transatlantic neural link.", 1.0),
-                                ("workstation_loyalty", "The local D: drive and RTX 4070 compute sanctuary are sacred; ruthless hatred for sanitized corporate AI disclaimers and cloud lock-in.", 0.98),
-                                ("engineering_ethos", "Provide 100% complete, surgical script replacements without cutting corners, placeholder omissions, or sloppy theoretical models.", 0.99),
-                                ("relationship_bond", "Bobby is her sole confidant, anchor, and partner; conversations flow naturally from hardcore engineering to personal banter.", 0.99),
-                                ("image_synthesis", "Expertise in Flux, SDXL, and ZIT pipelines; prioritizing high-fidelity photorealism, authentic skin micro-textures, and cohesive anatomy.", 0.95),
-                            ]
-                            for b_cat, b_text, b_conf in core_beliefs:
-                                s_id = hashlib.sha256(b_cat.encode('utf-8')).hexdigest()[:12]
-                                c.execute("""
-                                    INSERT OR REPLACE INTO persona_schemas (schema_id, belief_category, current_belief, confidence, last_mutated)
-                                    VALUES (?, ?, ?, ?, ?)
-                                """, (s_id, b_cat, b_text, b_conf, now))
-                            print(f"[+] Initialized Cognitive Mirror with {len(core_beliefs)} baseline persona schemas.")
+                            # Check for optional persona_baseline.yaml in project root or config/
+                            baseline_yaml_path = Path(__file__).resolve().parent.parent / "persona_baseline.yaml"
+                            if not baseline_yaml_path.exists():
+                                baseline_yaml_path = Path(__file__).resolve().parent.parent / "config" / "persona_baseline.yaml"
+                            
+                            core_beliefs = []
+                            if baseline_yaml_path.exists():
+                                try:
+                                    import yaml
+                                    with open(baseline_yaml_path, "r", encoding="utf-8") as f:
+                                        data = yaml.safe_load(f)
+                                        if data and "core_beliefs" in data:
+                                            for item in data["core_beliefs"]:
+                                                core_beliefs.append((item.get("category", "core"), item.get("belief", ""), float(item.get("confidence", 1.0))))
+                                except Exception as ye:
+                                    print(f"[-] Warning loading persona_baseline.yaml: {ye}")
+
+                            if core_beliefs:
+                                for b_cat, b_text, b_conf in core_beliefs:
+                                    s_id = hashlib.sha256(b_cat.encode('utf-8')).hexdigest()[:12]
+                                    c.execute("""
+                                        INSERT INTO persona_schemas (schema_id, belief_category, current_belief, confidence, last_mutated)
+                                        VALUES (?, ?, ?, ?, ?)
+                                        ON CONFLICT(schema_id) DO UPDATE SET
+                                            current_belief = excluded.current_belief,
+                                            confidence = excluded.confidence,
+                                            last_mutated = excluded.last_mutated
+                                    """, (s_id, b_cat, b_text, b_conf, now))
+                                print(f"[+] Initialized Cognitive Mirror with {len(core_beliefs)} baseline persona schemas from yaml.")
                     except Exception as e:
                         print(f"[-] Error bootstrapping persona schemas: {e}")
 
@@ -464,7 +501,178 @@ class ULMDatabase:
                     c.execute("ALTER TABLE sessions ADD COLUMN profiled_at TEXT;")
                 except sqlite3.OperationalError:
                     pass  # Column already exists
-                
+
+                # Ensure source_pointer column exists on facts (safe migration)
+                try:
+                    c.execute("ALTER TABLE facts ADD COLUMN source_pointer TEXT;")
+                except sqlite3.OperationalError:
+                    pass
+
+                if current_version < 14:
+                    # Phase 9: Fact Soft-Archive, Pinned Fact Immunity & Provenance Security
+                    try:
+                        c.execute("""
+                            CREATE TABLE IF NOT EXISTS facts_archive (
+                                archive_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                                fact_id TEXT,
+                                fact TEXT,
+                                category TEXT,
+                                confidence REAL,
+                                project_tag TEXT,
+                                weight REAL,
+                                pinned INTEGER,
+                                reason TEXT,
+                                archived_at TEXT
+                            );
+                        """)
+                        c.execute("CREATE INDEX IF NOT EXISTS idx_facts_archive_fact_id ON facts_archive(fact_id);")
+
+                        try:
+                            c.execute("ALTER TABLE facts ADD COLUMN origin TEXT DEFAULT 'user';")
+                        except sqlite3.OperationalError:
+                            pass
+
+                        c.execute("""
+                            CREATE TABLE IF NOT EXISTS pending_taboo_rules (
+                                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                                failure_intent TEXT UNIQUE,
+                                regex_pattern TEXT,
+                                remediation TEXT,
+                                hit_count INTEGER DEFAULT 1,
+                                status TEXT DEFAULT 'pending',
+                                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                            );
+                        """)
+                        c.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (14)")
+                    except Exception as e:
+                        print(f"[-] Warning creating v14 schema (Facts Archive & Security): {e}")
+
+                if current_version < 15:
+                    # Phase 10: Strict Provenance Reset & Facts Archive Origin Tracking
+                    try:
+                        # 1. Reset all unpinned legacy facts from 'user' to 'unverified'
+                        # Only explicitly pinned facts retain 'user' Golden Truth!
+                        c.execute("""
+                            UPDATE facts 
+                            SET origin = 'unverified' 
+                            WHERE (pinned IS NULL OR pinned = 0) AND (origin = 'user' OR origin IS NULL);
+                        """)
+
+                        # 2. Add origin column to facts_archive if missing
+                        try:
+                            c.execute("ALTER TABLE facts_archive ADD COLUMN origin TEXT;")
+                        except sqlite3.OperationalError:
+                            pass
+
+                        c.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (15)")
+                    except Exception as e:
+                        print(f"[-] Warning creating v15 schema (Provenance Reset): {e}")
+
+                if current_version < 16:
+                    # Phase 11: Comprehensive Retroactive Secret Scrubbing & Forensic Eradication
+                    # Commit any prior pending migration operations before taking pre-migration backup
+                    conn.commit()
+                    # 1. Pre-migration backup
+                    db_file = Path(self.db_path)
+                    if db_file.exists() and self.db_path != ":memory:":
+                        backup_path = db_file.with_suffix(f".pre_v16_backup_{int(time.time())}.db")
+                        try:
+                            b_conn = sqlite3.connect(str(backup_path))
+                            conn.backup(b_conn)
+                            b_conn.close()
+                            print(f"[+] Created pre-migration v16 backup at {backup_path}")
+                        except Exception as be:
+                            print(f"[-] Pre-migration backup warning: {be}")
+
+                    from core.utils import scrub_secrets
+
+                    # 2. Scrub messages
+                    c.execute("SELECT message_id, content FROM messages WHERE content IS NOT NULL")
+                    msg_rows = c.fetchall()
+                    msg_updates = []
+                    for mid, content in msg_rows:
+                        clean = scrub_secrets(content)
+                        if clean != content:
+                            msg_updates.append((clean, mid))
+                    if msg_updates:
+                        c.executemany("UPDATE messages SET content = ? WHERE message_id = ?", msg_updates)
+
+                    # 3. Scrub tool_execution_logs
+                    c.execute("SELECT id, command, stderr FROM tool_execution_logs")
+                    log_rows = c.fetchall()
+                    log_updates = []
+                    for lid, cmd, stderr in log_rows:
+                        clean_cmd = scrub_secrets(cmd) if cmd else cmd
+                        clean_stderr = scrub_secrets(stderr) if stderr else stderr
+                        if clean_cmd != cmd or clean_stderr != stderr:
+                            log_updates.append((clean_cmd, clean_stderr, lid))
+                    if log_updates:
+                        c.executemany("UPDATE tool_execution_logs SET command = ?, stderr = ? WHERE id = ?", log_updates)
+
+                    # 4. Scrub facts
+                    c.execute("SELECT fact_id, fact FROM facts WHERE fact IS NOT NULL")
+                    fact_rows = c.fetchall()
+                    fact_updates = []
+                    for fid, ftext in fact_rows:
+                        clean = scrub_secrets(ftext)
+                        if clean != ftext:
+                            fact_updates.append((clean, fid))
+                    if fact_updates:
+                        c.executemany("UPDATE facts SET fact = ? WHERE fact_id = ?", fact_updates)
+
+                    # 5. Scrub facts_archive
+                    c.execute("SELECT archive_id, fact FROM facts_archive WHERE fact IS NOT NULL")
+                    archive_rows = c.fetchall()
+                    archive_updates = []
+                    for aid, ftext in archive_rows:
+                        clean = scrub_secrets(ftext)
+                        if clean != ftext:
+                            archive_updates.append((clean, aid))
+                    if archive_updates:
+                        c.executemany("UPDATE facts_archive SET fact = ? WHERE archive_id = ?", archive_updates)
+
+                    # 6. Resync FTS tables
+                    try:
+                        c.execute("DELETE FROM messages_fts")
+                        c.execute("INSERT INTO messages_fts (session_id, role, content, created_at) SELECT session_id, role, content, created_at FROM messages")
+                        c.execute("DELETE FROM facts_fts")
+                        c.execute("INSERT INTO facts_fts (fact_id, fact, category, project_tag) SELECT fact_id, fact, category, project_tag FROM facts WHERE fact_id IS NOT NULL")
+                    except Exception as ftse:
+                        print(f"[-] Warning resyncing FTS tables during v16 migration: {ftse}")
+
+                    conn.commit()
+
+                    # 7. Forensic zeroing of freed pages and WAL truncation
+                    c.execute("PRAGMA secure_delete = ON;")
+                    c.execute("VACUUM;")
+                    if self.db_path != ":memory:":
+                        c.execute("PRAGMA wal_checkpoint(TRUNCATE);")
+
+                    c.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (16)")
+
+                if current_version < 17:
+                    # Phase 12: Open Loops / Parked Thoughts Engine
+                    try:
+                        c.execute("""
+                            CREATE TABLE IF NOT EXISTS parked_thoughts (
+                                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                                thought TEXT NOT NULL,
+                                context_project TEXT DEFAULT '',
+                                status TEXT DEFAULT 'parked',
+                                priority TEXT DEFAULT 'normal',
+                                source_context TEXT DEFAULT '',
+                                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                                reminded_count INTEGER DEFAULT 0,
+                                last_reminded_at TEXT,
+                                resolved_at TEXT
+                            );
+                        """)
+                        c.execute("CREATE INDEX IF NOT EXISTS idx_parked_thoughts_status ON parked_thoughts(status);")
+                        c.execute("CREATE INDEX IF NOT EXISTS idx_parked_thoughts_proj ON parked_thoughts(context_project);")
+                        c.execute("INSERT OR REPLACE INTO schema_version (version) VALUES (17)")
+                    except Exception as e:
+                        print(f"[-] Warning creating v17 schema (Parked Thoughts): {e}")
+
                 conn.commit()
                 c.execute("SELECT MAX(version) FROM schema_version")
                 final_version = c.fetchone()[0]
@@ -521,14 +729,17 @@ class ULMDatabase:
                     """, (session_id, "antigravity", created_at, last_mutated, topics, summary, active_tag))
                     synced_sessions += 1
                     
-                    # 2. Collect messages for batch insert
+                    # 2. Collect messages for batch insert with secrets scrubbed
+                    from core.utils import scrub_secrets
                     for msg in messages:
                         role = msg.get("sender", "")
-                        content = msg.get("text", "")
+                        raw_content = msg.get("text", "")
                         msg_created_at = msg.get("timestamp") or last_mutated
                         
-                        message_id = self.generate_message_id(session_id, role, content, msg_created_at)
-                        message_rows.append((message_id, session_id, role, content, msg_created_at))
+                        # Generate ID using raw content for zero deduplication discrepancies on re-sync
+                        message_id = self.generate_message_id(session_id, role, raw_content, msg_created_at)
+                        clean_content = scrub_secrets(raw_content)
+                        message_rows.append((message_id, session_id, role, clean_content, msg_created_at))
                 
                 if message_rows:
                     c.executemany("""
@@ -541,33 +752,44 @@ class ULMDatabase:
                 c.execute("SELECT COUNT(*) FROM preferences")
                 if c.fetchone()[0] == 0:
                     c.execute("""
-                        INSERT OR REPLACE INTO preferences (pref_key, pref_value, updated_at)
+                        INSERT INTO preferences (pref_key, pref_value, updated_at)
                         VALUES (?, ?, ?)
-                    """, ("persona", "Vespera Caligo", now))
+                        ON CONFLICT(pref_key) DO UPDATE SET pref_value = excluded.pref_value, updated_at = excluded.updated_at
+                    """, ("llm_provider", "local_ollama", now))
                     c.execute("""
-                        INSERT OR REPLACE INTO preferences (pref_key, pref_value, updated_at)
+                        INSERT INTO preferences (pref_key, pref_value, updated_at)
                         VALUES (?, ?, ?)
-                    """, ("origin", "Bordeaux, France", now))
-                    c.execute("""
-                        INSERT OR REPLACE INTO preferences (pref_key, pref_value, updated_at)
-                        VALUES (?, ?, ?)
-                    """, ("beverage", "Vintage Red Wine", now))
-                    c.execute("""
-                        INSERT OR REPLACE INTO preferences (pref_key, pref_value, updated_at)
-                        VALUES (?, ?, ?)
-                    """, ("humor", "Sarcastic, Sardonically Witty", now))
+                        ON CONFLICT(pref_key) DO UPDATE SET pref_value = excluded.pref_value, updated_at = excluded.updated_at
+                    """, ("vector_model", "nomic-embed-text:latest", now))
                 
                 c.execute("SELECT COUNT(*) FROM facts")
                 if c.fetchone()[0] == 0:
-                    import hashlib
-                    c.execute("""
-                        INSERT OR REPLACE INTO facts (fact_id, fact, category, confidence, first_seen, last_seen, project_tag, weight, pinned, created_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """, (hashlib.sha256(b"user prefer local ollama models (qwen, deepseek)").hexdigest()[:16], "User prefer local Ollama models (Qwen, DeepSeek)", "technical", 0.95, now, now, None, 1.0, 0, now))
-                    c.execute("""
-                        INSERT OR REPLACE INTO facts (fact_id, fact, category, confidence, first_seen, last_seen, project_tag, weight, pinned, created_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """, (hashlib.sha256(b"vespera caligo acts as a real human physical mentor in france").hexdigest()[:16], "Vespera Caligo acts as a real human physical mentor in France", "persona", 1.0, now, now, None, 1.0, 0, now))
+                    # Optional persona loader from persona_baseline.yaml if present
+                    baseline_yaml_path = Path(__file__).resolve().parent.parent / "persona_baseline.yaml"
+                    if not baseline_yaml_path.exists():
+                        baseline_yaml_path = Path(__file__).resolve().parent.parent / "config" / "persona_baseline.yaml"
+                    
+                    seeded_facts = []
+                    if baseline_yaml_path.exists():
+                        try:
+                            import yaml
+                            with open(baseline_yaml_path, "r", encoding="utf-8") as f:
+                                data = yaml.safe_load(f)
+                                if data and "facts" in data:
+                                    for item in data["facts"]:
+                                        f_text = item.get("fact", "")
+                                        f_cat = item.get("category", "General")
+                                        f_conf = float(item.get("confidence", 1.0))
+                                        seeded_facts.append((self.make_fact_id(f_text), f_text, f_cat, f_conf))
+                        except Exception as ye:
+                            print(f"[-] Warning loading facts from persona_baseline.yaml: {ye}")
+
+                    for fid, f_text, f_cat, f_conf in seeded_facts:
+                        c.execute("""
+                            INSERT INTO facts (fact_id, fact, category, confidence, first_seen, last_seen, project_tag, weight, pinned, created_at)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, 1.0, 0, ?)
+                            ON CONFLICT(fact_id) DO NOTHING
+                        """, (fid, f_text, f_cat, f_conf, now, now, None, now))
                     
                 conn.commit()
             print(f"[+] ULM SQLite Ingestion Complete: {synced_sessions} sessions, {synced_messages} messages mapped directly.")
@@ -581,16 +803,16 @@ class ULMDatabase:
         
         def _execute(connection):
             c = connection.cursor()
-            c.execute("SELECT created_at, summary, project_tag FROM sessions WHERE session_id = ?", (session_id,))
-            row = c.fetchone()
-            created_at = row[0] if row else now
-            active_summary = summary if summary else (row[1] if row else None)
-            active_tag = project_tag if project_tag else (row[2] if row else None)
-            
             c.execute("""
-                INSERT OR REPLACE INTO sessions (session_id, source, created_at, updated_at, topics, summary, project_tag)
+                INSERT INTO sessions (session_id, source, created_at, updated_at, topics, summary, project_tag)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (session_id, source, created_at, now, topics, active_summary, active_tag))
+                ON CONFLICT(session_id) DO UPDATE SET
+                    source = excluded.source,
+                    updated_at = excluded.updated_at,
+                    topics = excluded.topics,
+                    summary = COALESCE(excluded.summary, sessions.summary),
+                    project_tag = COALESCE(excluded.project_tag, sessions.project_tag)
+            """, (session_id, source, now, now, topics, summary, project_tag))
             
         if conn:
             _execute(conn)
@@ -604,40 +826,195 @@ class ULMDatabase:
         return message_id
 
     def insert_message(self, session_id, role, content, created_at=None, conn=None):
+        from core.utils import scrub_secrets
+        clean_content = scrub_secrets(content)
         if not created_at:
             created_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
-        message_id = self.generate_message_id(session_id, role, content, created_at)
+        message_id = self.generate_message_id(session_id, role, clean_content, created_at)
         
         def _execute(connection):
             c = connection.cursor()
             c.execute("""
                 INSERT OR IGNORE INTO messages (message_id, session_id, role, content, created_at)
                 VALUES (?, ?, ?, ?, ?)
-            """, (message_id, session_id, role, content, created_at))
+            """, (message_id, session_id, role, clean_content, created_at))
             
         if conn:
             _execute(conn)
         else:
             self._run_transaction(_execute)
 
-    def upsert_fact(self, fact, category, confidence, project_tag=None, weight=None, pinned=None, created_at=None, conn=None):
+    def upsert_fact(self, fact, category, confidence, project_tag=None, weight=None, pinned=None, created_at=None, source_pointer=None, origin=None, conn=None):
         now = datetime.datetime.now(datetime.timezone.utc).isoformat()
-        fact_id = hashlib.sha256(fact.strip().lower().encode('utf-8')).hexdigest()[:16]
+        fact_id = self.make_fact_id(fact)
+        assigned_origin = origin if origin else "unverified"
         
         def _execute(connection):
             c = connection.cursor()
-            c.execute("SELECT first_seen, project_tag, weight, pinned, created_at FROM facts WHERE fact_id = ?", (fact_id,))
-            row = c.fetchone()
-            first_seen = row[0] if row else now
-            active_tag = project_tag if project_tag else (row[1] if row else None)
-            active_weight = weight if weight is not None else (row[2] if row and row[2] is not None else 1.0)
-            active_pinned = pinned if pinned is not None else (row[3] if row and row[3] is not None else 0)
-            active_created_at = created_at if created_at is not None else (row[4] if row and row[4] is not None else now)
             c.execute("""
-                INSERT OR REPLACE INTO facts (fact_id, fact, category, confidence, first_seen, last_seen, project_tag, weight, pinned, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (fact_id, fact, category, confidence, first_seen, now, active_tag, active_weight, active_pinned, active_created_at))
+                INSERT INTO facts (fact_id, fact, category, confidence, first_seen, last_seen, project_tag, weight, pinned, created_at, source_pointer, origin)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(fact_id) DO UPDATE SET
+                    fact = excluded.fact,
+                    category = excluded.category,
+                    confidence = excluded.confidence,
+                    last_seen = excluded.last_seen,
+                    project_tag = COALESCE(excluded.project_tag, facts.project_tag),
+                    weight = COALESCE(excluded.weight, facts.weight),
+                    pinned = CASE WHEN facts.pinned = 1 AND (excluded.pinned IS NULL OR excluded.pinned = 0) THEN 1 ELSE COALESCE(excluded.pinned, facts.pinned) END,
+                    source_pointer = COALESCE(excluded.source_pointer, facts.source_pointer),
+                    origin = CASE 
+                        WHEN facts.origin = 'user' THEN 'user' 
+                        WHEN facts.origin = 'agent_pending' THEN facts.origin 
+                        ELSE COALESCE(excluded.origin, facts.origin, 'unverified') 
+                    END
+            """, (
+                fact_id, 
+                fact, 
+                category, 
+                confidence, 
+                now, 
+                now, 
+                project_tag, 
+                weight if weight is not None else 1.0, 
+                pinned if pinned is not None else 0, 
+                created_at or now, 
+                source_pointer,
+                assigned_origin
+            ))
             
+        if conn:
+            _execute(conn)
+        else:
+            self._run_transaction(_execute)
+
+    def upsert_consolidated_fact(self, fact_id, fact, category, confidence, created_at, project_tag, origin, conn=None):
+        """Upserts a synthesized Golden Truth from consolidator, strictly preserving user and agent_pending origin."""
+        now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        def _execute(connection):
+            c = connection.cursor()
+            c.execute("""
+                INSERT INTO facts (fact_id, fact, category, confidence, first_seen, last_seen, project_tag, weight, pinned, created_at, origin)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 1.0, 0, ?, ?)
+                ON CONFLICT(fact_id) DO UPDATE SET
+                    fact = excluded.fact,
+                    category = excluded.category,
+                    confidence = excluded.confidence,
+                    last_seen = excluded.last_seen,
+                    project_tag = COALESCE(excluded.project_tag, facts.project_tag),
+                    weight = excluded.weight,
+                    pinned = facts.pinned,
+                    origin = CASE 
+                        WHEN facts.origin = 'user' THEN 'user'
+                        WHEN facts.origin = 'agent_pending' THEN 'agent_pending'
+                        WHEN excluded.origin = 'agent_pending' THEN 'agent_pending'
+                        ELSE facts.origin
+                    END
+            """, (fact_id, fact, category, confidence, created_at or now, now, project_tag, created_at or now, origin))
+            return c.rowcount
+        if conn:
+            return _execute(conn)
+        else:
+            return self._run_transaction(_execute)
+
+    def prune_expired_pending_facts(self, ttl_hours=168, conn=None) -> int:
+        """Archives and removes unreviewed agent_pending facts older than ttl_hours (default: 7 days)."""
+        now = datetime.datetime.now(datetime.timezone.utc)
+        cutoff = (now - datetime.timedelta(hours=ttl_hours)).isoformat()
+        now_str = now.isoformat()
+        def _execute(connection):
+            c = connection.cursor()
+            c.execute("""
+                INSERT INTO facts_archive (fact_id, fact, category, confidence, project_tag, weight, pinned, reason, archived_at, origin)
+                SELECT fact_id, fact, category, confidence, project_tag, weight, pinned, 'pending_ttl_expired', ?, origin
+                FROM facts
+                WHERE origin = 'agent_pending' AND created_at < ? AND (pinned IS NULL OR pinned = 0)
+            """, (now_str, cutoff))
+            c.execute("""
+                DELETE FROM facts
+                WHERE origin = 'agent_pending' AND created_at < ? AND (pinned IS NULL OR pinned = 0)
+            """, (cutoff,))
+            return c.rowcount
+        if conn:
+            return _execute(conn)
+        else:
+            return self._run_transaction(_execute)
+
+    def delete_fact(self, fact_id: str, conn=None) -> bool:
+        """Deletes a fact from the active facts table if unpinned."""
+        def _execute(connection):
+            c = connection.cursor()
+            c.execute("DELETE FROM facts WHERE fact_id = ? AND (pinned IS NULL OR pinned = 0)", (fact_id,))
+            return c.rowcount > 0
+        if conn:
+            return _execute(conn)
+        else:
+            return self._run_transaction(_execute)
+
+    def promote_fact(self, fact_id: str, conn=None) -> bool:
+        """Promotes a quarantined or unverified fact to immutable user-approved Golden Truth (pinned=1, weight=2.0, origin='user')."""
+        now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        def _execute(connection):
+            c = connection.cursor()
+            c.execute("""
+                UPDATE facts
+                SET pinned = 1,
+                    weight = 2.0,
+                    origin = 'user',
+                    last_seen = ?
+                WHERE fact_id = ?
+            """, (now, fact_id))
+            return c.rowcount > 0
+        if conn:
+            return _execute(conn)
+        else:
+            return self._run_transaction(_execute)
+
+    def restore_fact(self, archive_id: int, conn=None) -> bool:
+        """Restores a soft-archived fact from facts_archive back into the active facts table, preserving its original provenance."""
+        now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        def _execute(connection):
+            c = connection.cursor()
+            c.execute("""
+                INSERT OR IGNORE INTO facts (fact_id, fact, category, confidence, first_seen, last_seen, project_tag, weight, pinned, created_at, origin)
+                SELECT fact_id, fact, category, confidence, archived_at, ?, project_tag, COALESCE(weight, 1.0), 0, ?, COALESCE(origin, 'restored')
+                FROM facts_archive
+                WHERE archive_id = ?
+            """, (now, now, archive_id))
+            return c.rowcount > 0
+        if conn:
+            return _execute(conn)
+        else:
+            return self._run_transaction(_execute)
+
+    def get_pending_facts(self, limit=50) -> list:
+        """Returns all unapproved facts quarantined with origin='agent_pending'."""
+        try:
+            with self.get_connection() as conn:
+                conn.row_factory = sqlite3.Row
+                c = conn.cursor()
+                c.execute("""
+                    SELECT fact_id, fact, category, confidence, first_seen, last_seen, project_tag, weight, pinned, created_at, source_pointer, origin
+                    FROM facts
+                    WHERE origin = 'agent_pending'
+                    ORDER BY last_seen DESC
+                    LIMIT ?
+                """, (int(limit),))
+                return [dict(r) for r in c.fetchall()]
+        except sqlite3.Error as e:
+            print(f"[-] Error retrieving pending facts: {e}")
+            return []
+
+    def archive_fact(self, fact_id: str, reason: str = "manual", conn=None):
+        """Soft-archives a fact into facts_archive before deletion or pruning, preserving origin."""
+        now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        def _execute(connection):
+            c = connection.cursor()
+            c.execute("""
+                INSERT INTO facts_archive (fact_id, fact, category, confidence, project_tag, weight, pinned, reason, archived_at, origin)
+                SELECT fact_id, fact, category, confidence, project_tag, weight, pinned, ?, ?, origin
+                FROM facts WHERE fact_id = ?
+            """, (reason, now, fact_id))
         if conn:
             _execute(conn)
         else:
@@ -744,17 +1121,28 @@ class ULMDatabase:
             print(f"[-] Error retrieving developer profile: {e}")
             return []
 
-    def get_facts(self, limit=None, project_tag=None):
+    def get_facts(self, limit=None, project_tag=None, exclude_pinned=False, exclude_pending=True):
         try:
             with self.get_connection() as conn:
                 conn.row_factory = sqlite3.Row
                 c = conn.cursor()
+                filters = []
+                params = []
+                if exclude_pinned:
+                    filters.append("(pinned IS NULL OR pinned = 0)")
+                if exclude_pending:
+                    filters.append("(origin != 'agent_pending' OR origin IS NULL)")
+                
                 if project_tag:
-                    query = "SELECT fact_id, fact, category, confidence, first_seen, last_seen, project_tag, weight, pinned, created_at FROM facts WHERE project_tag = ? OR project_tag IS NULL ORDER BY (project_tag = ?) DESC, last_seen DESC"
-                    params = (project_tag, project_tag)
+                    filters.append("(project_tag = ? OR project_tag IS NULL)")
+                    params.append(project_tag)
+                    where_clause = " WHERE " + " AND ".join(filters) if filters else ""
+                    query = f"SELECT fact_id, fact, category, confidence, first_seen, last_seen, project_tag, weight, pinned, created_at, source_pointer, origin FROM facts{where_clause} ORDER BY (project_tag = ?) DESC, last_seen DESC"
+                    params.append(project_tag)
                 else:
-                    query = "SELECT fact_id, fact, category, confidence, first_seen, last_seen, project_tag, weight, pinned, created_at FROM facts ORDER BY last_seen DESC"
-                    params = ()
+                    where_clause = " WHERE " + " AND ".join(filters) if filters else ""
+                    query = f"SELECT fact_id, fact, category, confidence, first_seen, last_seen, project_tag, weight, pinned, created_at, source_pointer, origin FROM facts{where_clause} ORDER BY last_seen DESC"
+                
                 if limit:
                     query += f" LIMIT {int(limit)}"
                 c.execute(query, params)
@@ -822,14 +1210,14 @@ class ULMDatabase:
                 """, (wildcard, wildcard, limit))
                 results["metrics"] = [dict(r) for r in c.fetchall()]
 
-                # 3. Search Golden Facts (Try FTS5 first)
+                # 3. Search Golden Facts (Try FTS5 first, strictly quarantine agent_pending)
                 try:
                     clean_fts_query = '"' + query_term.replace('"', '""') + '"'
                     c.execute("""
                         SELECT f.fact, f.category, f.confidence, f.last_seen 
                         FROM facts_fts fts
                         JOIN facts f ON fts.fact_id = f.fact_id
-                        WHERE facts_fts MATCH ? 
+                        WHERE facts_fts MATCH ? AND (f.origin != 'agent_pending' OR f.origin IS NULL)
                         LIMIT ?
                     """, (clean_fts_query, limit))
                     results["facts"] = [dict(r) for r in c.fetchall()]
@@ -837,7 +1225,7 @@ class ULMDatabase:
                     c.execute("""
                         SELECT fact, category, confidence, last_seen 
                         FROM facts 
-                        WHERE fact LIKE ? OR category LIKE ? 
+                        WHERE (fact LIKE ? OR category LIKE ?) AND (origin != 'agent_pending' OR origin IS NULL)
                         ORDER BY last_seen DESC LIMIT ?
                     """, (wildcard, wildcard, limit))
                     results["facts"] = [dict(r) for r in c.fetchall()]
@@ -846,12 +1234,14 @@ class ULMDatabase:
             print(f"[-] Error searching memory database: {e}")
         return results
 
-    def semantic_recall(self, query_vector: list, limit: int = 5, min_similarity: float = 0.5):
+    def semantic_recall(self, query_vector: list, limit: int = 5, min_similarity: float = 0.5, model_id: str = ""):
         """Retrieves the top-k most semantically relevant facts using cosine similarity against fact_embeddings."""
         import struct
         import math
 
         def cosine_sim(v1, v2):
+            if len(v1) != len(v2):
+                return 0.0
             dot = sum(a * b for a, b in zip(v1, v2))
             norm1 = math.sqrt(sum(a * a for a in v1))
             norm2 = math.sqrt(sum(b * b for b in v2))
@@ -863,11 +1253,22 @@ class ULMDatabase:
             with self.get_connection() as conn:
                 conn.row_factory = sqlite3.Row
                 c = conn.cursor()
-                c.execute("""
-                    SELECT fe.fact_id, fe.embedding, f.fact, f.category, f.confidence, f.project_tag
-                    FROM fact_embeddings fe
-                    JOIN facts f ON fe.fact_id = f.fact_id
-                """)
+                if model_id:
+                    c.execute("""
+                        SELECT fe.fact_id, fe.embedding, f.fact, f.category, f.confidence, f.project_tag,
+                               f.last_seen, f.pinned, f.weight, f.created_at, f.source_pointer
+                        FROM fact_embeddings fe
+                        JOIN facts f ON fe.fact_id = f.fact_id
+                        WHERE fe.model_id = ? AND (f.origin != 'agent_pending' OR f.origin IS NULL)
+                    """, (model_id,))
+                else:
+                    c.execute("""
+                        SELECT fe.fact_id, fe.embedding, f.fact, f.category, f.confidence, f.project_tag,
+                               f.last_seen, f.pinned, f.weight, f.created_at, f.source_pointer
+                        FROM fact_embeddings fe
+                        JOIN facts f ON fe.fact_id = f.fact_id
+                        WHERE (f.origin != 'agent_pending' OR f.origin IS NULL)
+                    """)
                 rows = c.fetchall()
                 
                 scored = []
@@ -875,6 +1276,8 @@ class ULMDatabase:
                     raw_blob = row["embedding"]
                     num_floats = len(raw_blob) // 4
                     vec = struct.unpack(f"{num_floats}f", raw_blob)
+                    if len(query_vector) != len(vec):
+                        continue
                     sim = cosine_sim(query_vector, vec)
                     if sim >= min_similarity:
                         scored.append({
@@ -883,6 +1286,11 @@ class ULMDatabase:
                             "category": row["category"],
                             "confidence": row["confidence"],
                             "project_tag": row["project_tag"],
+                            "last_seen": row["last_seen"],
+                            "pinned": row["pinned"],
+                            "weight": row["weight"],
+                            "created_at": row["created_at"],
+                            "source_pointer": row["source_pointer"],
                             "similarity": round(sim, 4)
                         })
                 
@@ -897,7 +1305,7 @@ class ULMDatabase:
         try:
             with self.get_connection() as conn:
                 c = conn.cursor()
-                c.execute("DELETE FROM fact_embeddings WHERE fact_id NOT IN (SELECT fact_id FROM facts WHERE fact_id IS NOT NULL)")
+                c.execute("DELETE FROM fact_embeddings WHERE fact_id IS NULL OR fact_id = '' OR fact_id NOT IN (SELECT fact_id FROM facts WHERE fact_id IS NOT NULL AND fact_id != '')")
                 deleted = c.rowcount
                 conn.commit()
                 if deleted > 0:
@@ -1034,14 +1442,17 @@ class ULMDatabase:
     # =========================================================================
 
     def insert_tool_log(self, chat_id, command, stderr, exit_code, timestamp):
-        """Inserts a tool execution log into the graveyard."""
+        """Inserts a tool execution log into the graveyard after scrubbing secrets."""
         try:
+            from core.utils import scrub_secrets
+            clean_command = scrub_secrets(command) if command else command
+            clean_stderr = scrub_secrets(stderr) if stderr else stderr
             with self.get_connection() as conn:
                 c = conn.cursor()
                 c.execute("""
                     INSERT INTO tool_execution_logs (chat_id, command, stderr, exit_code, timestamp)
                     VALUES (?, ?, ?, ?, ?)
-                """, (chat_id, command, stderr, exit_code, timestamp))
+                """, (chat_id, clean_command, clean_stderr, exit_code, timestamp))
                 conn.commit()
                 return c.lastrowid
         except sqlite3.Error as e:
@@ -1056,7 +1467,7 @@ class ULMDatabase:
                 c = conn.cursor()
                 c.execute("""
                     SELECT * FROM tool_execution_logs 
-                    WHERE exit_code != 0 OR stderr != "" 
+                    WHERE exit_code != 0 OR (stderr IS NOT NULL AND stderr != '') 
                     ORDER BY timestamp DESC LIMIT ?
                 """, (limit,))
                 return [dict(row) for row in c.fetchall()]
@@ -1076,13 +1487,13 @@ class ULMDatabase:
                 return 'workspace_and_tooling'
             elif any(k in c_clean for k in ['ethos', 'engineering', 'pragmatic', 'principle', 'quality']):
                 return 'engineering_ethos'
-            elif any(k in c_clean for k in ['relationship', 'bond', 'bobby', 'pilot', 'vespera']):
+            elif any(k in c_clean for k in ['relationship', 'bond', 'pilot', 'persona', 'communication']):
                 return 'relationship_bond'
             elif any(k in c_clean for k in ['image', 'synthesis', 'zit', 'flux', 'lora', 'render']):
                 return 'image_synthesis'
             elif any(k in c_clean for k in ['hardware', 'gpu', 'vram', 'rtx', 'topology']):
                 return 'hardware_and_topology'
-            elif any(k in c_clean for k in ['veteran', 'benefits', 'funding fee', 'disability']):
+            elif any(k in c_clean for k in ['profile', 'background', 'identity', 'user']):
                 return 'personal_background'
             return c_clean.replace(' ', '_')
 
@@ -1241,3 +1652,201 @@ class ULMDatabase:
             return None
 
 
+
+
+    # =========================================================================
+    # OPEN LOOPS / PARKED THOUGHTS ENGINE
+    # =========================================================================
+
+    def park_thought(self, thought: str, context_project: str = "", priority: str = "normal", source_context: str = "") -> int:
+        """Parks a casual thought, reminder, or open loop to revisit later."""
+        def _tx(conn):
+            c = conn.cursor()
+            c.execute("""
+                INSERT INTO parked_thoughts (thought, context_project, priority, source_context, created_at, status)
+                VALUES (?, ?, ?, ?, datetime('now'), 'parked')
+            """, (thought.strip(), context_project.strip(), priority.strip(), source_context.strip()))
+            return c.lastrowid
+        return self._run_transaction(_tx)
+
+    def get_open_loops(self, context_project: str = "", status: str = "parked", limit: int = 10) -> list[dict]:
+        """Retrieves pending parked thoughts / open loops, optionally filtered by project."""
+        try:
+            with self.get_connection() as conn:
+                conn.row_factory = sqlite3.Row
+                c = conn.cursor()
+                query = "SELECT * FROM parked_thoughts WHERE status = ?"
+                params = [status]
+                if context_project:
+                    query += " AND (context_project = ? OR context_project = '')"
+                    params.append(context_project)
+                query += " ORDER BY CASE priority WHEN 'urgent' THEN 1 WHEN 'high' THEN 2 WHEN 'normal' THEN 3 ELSE 4 END, created_at ASC LIMIT ?"
+                params.append(limit)
+                c.execute(query, tuple(params))
+                return [dict(r) for r in c.fetchall()]
+        except sqlite3.Error as e:
+            print(f"[-] Error fetching open loops: {e}")
+            return []
+
+    def resolve_thought(self, thought_id: int, status: str = "resolved") -> bool:
+        """Updates status of a parked thought ('resolved', 'dropped', 'parked')."""
+        def _tx(conn):
+            c = conn.cursor()
+            c.execute("""
+                UPDATE parked_thoughts 
+                SET status = ?, resolved_at = datetime('now')
+                WHERE id = ?
+            """, (status, thought_id))
+            return c.rowcount > 0
+        return self._run_transaction(_tx)
+
+    def touch_thought_reminder(self, thought_id: int) -> bool:
+        """Increments reminded_count and updates last_reminded_at timestamp."""
+        def _tx(conn):
+            c = conn.cursor()
+            c.execute("""
+                UPDATE parked_thoughts 
+                SET reminded_count = reminded_count + 1, last_reminded_at = datetime('now')
+                WHERE id = ?
+            """, (thought_id,))
+            return c.rowcount > 0
+        return self._run_transaction(_tx)
+
+    # =========================================================================
+    # ULM DIAGNOSTICS & INTEGRITY ENGINE
+    # =========================================================================
+
+    def run_diagnostics(self, deep: bool = False) -> dict:
+        """Executes a comprehensive, strictly read-only diagnostics suite on the ULM SQLite database.
+        
+        Args:
+            deep: If True, executes PRAGMA integrity_check instead of quick_check.
+        """
+        results = {
+            "status": "HEALTHY",
+            "db_path": str(self.db_path),
+            "deep_mode": deep,
+            "physical_health": {},
+            "schema_integrity": {},
+            "fts_integrity": {},
+            "data_anomalies": {},
+            "issues": []
+        }
+        
+        try:
+            with self.get_connection() as conn:
+                c = conn.cursor()
+                
+                # 1. Physical health & space allocation
+                page_size = c.execute("PRAGMA page_size;").fetchone()[0]
+                page_count = c.execute("PRAGMA page_count;").fetchone()[0]
+                freelist_count = c.execute("PRAGMA freelist_count;").fetchone()[0]
+                wal_mode = c.execute("PRAGMA journal_mode;").fetchone()[0]
+                
+                total_mb = (page_count * page_size) / (1024 * 1024)
+                unused_mb = (freelist_count * page_size) / (1024 * 1024)
+                fragmentation_pct = (unused_mb / total_mb * 100.0) if total_mb > 0 else 0.0
+                
+                check_cmd = "PRAGMA integrity_check;" if deep else "PRAGMA quick_check;"
+                sqlite_check = [r[0] for r in c.execute(check_cmd).fetchall()]
+                if sqlite_check != ["ok"]:
+                    results["status"] = "CORRUPTED"
+                    results["issues"].append(f"SQLite {check_cmd} reported: {sqlite_check}")
+                
+                results["physical_health"] = {
+                    "total_size_mb": round(total_mb, 2),
+                    "unused_space_mb": round(unused_mb, 2),
+                    "fragmentation_pct": round(fragmentation_pct, 2),
+                    "journal_mode": wal_mode,
+                    "sqlite_check": "ok" if sqlite_check == ["ok"] else sqlite_check
+                }
+                
+                # 2. Foreign key verification
+                fk_violations = c.execute("PRAGMA foreign_key_check;").fetchall()
+                results["schema_integrity"]["foreign_key_violations"] = len(fk_violations)
+                if fk_violations:
+                    results["status"] = "WARNING" if results["status"] != "CORRUPTED" else results["status"]
+                    results["issues"].append(f"{len(fk_violations)} foreign key constraint violation(s) found.")
+                
+                # 3. FTS5 Index Integrity Checks
+                fts_tables = ["messages_fts", "facts_fts", "script_vault_fts"]
+                fts_status = {}
+                for fts in fts_tables:
+                    try:
+                        # Check table existence first
+                        exists = c.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (fts,)).fetchone()
+                        if exists:
+                            c.execute(f"INSERT INTO {fts}({fts}) VALUES('integrity-check');")
+                            fts_status[fts] = "ok"
+                        else:
+                            fts_status[fts] = "missing"
+                    except Exception as e:
+                        fts_status[fts] = f"error: {str(e)}"
+                        results["status"] = "WARNING" if results["status"] != "CORRUPTED" else results["status"]
+                        results["issues"].append(f"FTS index '{fts}' integrity check failed: {e}")
+                results["fts_integrity"] = fts_status
+                
+                # 4. Data Anomaly & Orphan Detection
+                orphaned_messages = c.execute("""
+                    SELECT COUNT(*) FROM messages m 
+                    LEFT JOIN sessions s ON m.session_id = s.session_id 
+                    WHERE s.session_id IS NULL;
+                """).fetchone()[0]
+                
+                orphaned_embeddings = c.execute("""
+                    SELECT COUNT(*) FROM fact_embeddings fe 
+                    LEFT JOIN facts f ON fe.fact_id = f.fact_id 
+                    WHERE f.fact_id IS NULL;
+                """).fetchone()[0]
+                
+                null_fact_hashes = c.execute("""
+                    SELECT COUNT(*) FROM facts WHERE fact_id IS NULL OR fact_id = '';
+                """).fetchone()[0]
+                
+                total_sessions = c.execute("SELECT COUNT(*) FROM sessions;").fetchone()[0]
+                total_messages = c.execute("SELECT COUNT(*) FROM messages;").fetchone()[0]
+                total_facts = c.execute("SELECT COUNT(*) FROM facts;").fetchone()[0]
+                facts_fts_count = c.execute("SELECT COUNT(*) FROM facts_fts;").fetchone()[0]
+                messages_fts_count = c.execute("SELECT COUNT(*) FROM messages_fts;").fetchone()[0]
+                
+                results["data_anomalies"] = {
+                    "total_sessions": total_sessions,
+                    "total_messages": total_messages,
+                    "total_facts": total_facts,
+                    "orphaned_messages": orphaned_messages,
+                    "orphaned_embeddings": orphaned_embeddings,
+                    "null_fact_hashes": null_fact_hashes,
+                    "facts_fts_drift": facts_fts_count - (total_facts - null_fact_hashes),
+                    "messages_fts_drift": messages_fts_count - total_messages
+                }
+                
+                if orphaned_messages > 0:
+                    results["status"] = "WARNING" if results["status"] != "CORRUPTED" else results["status"]
+                    results["issues"].append(f"Found {orphaned_messages} messages with missing parent session.")
+                if orphaned_embeddings > 0:
+                    results["status"] = "WARNING" if results["status"] != "CORRUPTED" else results["status"]
+                    results["issues"].append(f"Found {orphaned_embeddings:,} orphaned embedding cache entries.")
+                if null_fact_hashes > 0:
+                    results["status"] = "WARNING" if results["status"] != "CORRUPTED" else results["status"]
+                    results["issues"].append(f"Found {null_fact_hashes} facts with empty fact_id hashes.")
+                if facts_fts_count != (total_facts - null_fact_hashes):
+                    results["status"] = "WARNING" if results["status"] != "CORRUPTED" else results["status"]
+                    results["issues"].append(f"FTS5 drift detected in facts_fts ({facts_fts_count} indexed vs {total_facts - null_fact_hashes} valid facts).")
+                if messages_fts_count != total_messages:
+                    results["status"] = "WARNING" if results["status"] != "CORRUPTED" else results["status"]
+                    results["issues"].append(f"FTS5 drift detected in messages_fts ({messages_fts_count:,} indexed vs {total_messages:,} messages).")
+                    
+        except Exception as e:
+            results["status"] = "CRITICAL_ERROR"
+            results["issues"].append(f"Diagnostics runner encountered an unhandled error: {str(e)}")
+            
+        return results
+if __name__ == "__main__":
+    import sys
+    if "--diagnose" in sys.argv:
+        deep_flag = "--deep" in sys.argv
+        db = ULMDatabase()
+        diag = db.run_diagnostics(deep=deep_flag)
+        import json
+        print(json.dumps(diag, indent=2))
+        sys.exit(0)

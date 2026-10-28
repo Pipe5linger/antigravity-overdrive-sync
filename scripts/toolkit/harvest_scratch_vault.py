@@ -28,11 +28,25 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from core.database import ULMDatabase
 
-DEFAULT_BRAIN_DIR = Path(r"C:\Users\boben\.gemini\antigravity\brain")
+DEFAULT_BRAIN_DIR = Path.home() / ".gemini" / "antigravity" / "brain"
 DEFAULT_DB_PATH = PROJECT_ROOT / "db" / "sync_state.db"
 
 UUID_REGEX = re.compile(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', re.I)
 TARGET_PATH_REGEX = re.compile(r'r?["\']([a-zA-Z]:[\\/][^"\']*(?:brain|logs|scratch)[\\/][0-9a-f\-]{36}[^"\']*)["\']', re.I)
+
+# Secret scrubbing patterns for cloud model privacy
+SECRET_PATTERNS = [
+    (re.compile(r'(AIzaSy[A-Za-z0-9-_]{33})'), 'AIzaSy[REDACTED_API_KEY]'),
+    (re.compile(r'(gh[pousr]_[A-Za-z0-9_]{36,255})'), 'ghp_[REDACTED_GITHUB_TOKEN]'),
+    (re.compile(r'((?:api[_-]?key|secret|token)\s*[:=]\s*["\'])([A-Za-z0-9-_]{16,})(["\'])', re.I), r'\g<1>[REDACTED_SECRET]\g<3>'),
+]
+
+def scrub_secrets(code_content: str) -> str:
+    """Masks high-entropy tokens, API keys, and credentials before vaulting scripts."""
+    scrubbed = code_content
+    for pattern, repl in SECRET_PATTERNS:
+        scrubbed = pattern.sub(repl, scrubbed)
+    return scrubbed
 
 def extract_script_metadata(code_content: str, filename: str) -> tuple[str, str]:
     """
@@ -123,20 +137,28 @@ def sanitize_and_classify_script(code_content: str, filename: str) -> tuple[str,
     else:
         scope = "GLOBAL"
 
-    sanitized_code = code_content
+    sanitized_code = scrub_secrets(code_content)
 
     # Auto-parameterization for recipes:
     if scope == "RECIPE":
-        def _param_replacer(match):
-            orig_path = match.group(1)
-            return f"(sys.argv[1] if len(sys.argv) > 1 else r\"{orig_path}\")"
+        # Collect distinct matched paths to parameterize them with indexed sys.argv if multiple
+        distinct_paths = []
+        for m in TARGET_PATH_REGEX.finditer(sanitized_code):
+            p = m.group(1)
+            if p not in distinct_paths:
+                distinct_paths.append(p)
 
-        new_code, count = TARGET_PATH_REGEX.subn(_param_replacer, code_content)
-        if count > 0:
-            if "import sys" not in new_code:
-                new_code = "import sys\n" + new_code
-            header = f"# [ULM SANITIZED RECIPE] Parameterized {count} hardcoded target path(s).\n# Usage: python {filename} [TARGET_PATH]\n"
-            sanitized_code = header + new_code
+        if distinct_paths:
+            for idx, p in enumerate(distinct_paths, start=1):
+                escaped = re.escape(p)
+                pattern = re.compile(rf'r?["\']{escaped}["\']')
+                repl_str = f'(sys.argv[{idx}] if len(sys.argv) > {idx} else r"{p}")'
+                sanitized_code = pattern.sub(lambda m, r=repl_str: r, sanitized_code)
+
+            if "import sys" not in sanitized_code:
+                sanitized_code = "import sys\n" + sanitized_code
+            header = f"# [ULM SANITIZED RECIPE] Parameterized {len(distinct_paths)} distinct target path(s).\n# Usage: python {filename} [TARGET_PATH ...]\n"
+            sanitized_code = header + sanitized_code
 
     summary, category = extract_script_metadata(sanitized_code, filename)
     return sanitized_code, summary, category, scope

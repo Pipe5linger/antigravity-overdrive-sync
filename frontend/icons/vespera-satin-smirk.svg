@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="100%" height="100%" fill="none">
+  <defs>
+    <linearGradient id="lipGradUpper" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#e11d48"/>
+      <stop offset="50%" stop-color="#be123c"/>
+      <stop offset="100%" stop-color="#881337"/>
+    </linearGradient>
+    <linearGradient id="lipGradLower" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#9f1239"/>
+      <stop offset="60%" stop-color="#be123c"/>
+      <stop offset="100%" stop-color="#fb7185"/>
+    </linearGradient>
+    <filter id="lipGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="0" stdDeviation="2" flood-color="#fb7185" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+  <!-- Parted Oral Shadow -->
+  <path d="M10 26C16 25 32 25 38 25C32 28 16 28 10 26Z" fill="#18181b"/>
+  <!-- Upper Lip with subtle asymmetric smirk lift on the right corner -->
+  <path d="M7 26C13 22.5 19 19.5 24 22.5C29 19.5 35 22.5 41 23.5C35 26.5 29 25.5 24 25.5C19 25.5 13 27.5 7 26Z" fill="url(#lipGradUpper)" stroke="#fda4af" stroke-width="1.2" stroke-linejoin="round" filter="url(#lipGlow)"/>
+  <!-- Cupid's bow highlight -->
+  <path d="M21 21.5C23 20.5 25 20.5 27 21.5" stroke="#ffffff" stroke-width="1" stroke-linecap="round" opacity="0.6"/>
+  <!-- Lower Full Satin Lip with gluteal curvature -->
+  <path d="M9 26C15 35 33 35 39 23.8C33 30 25 30 9 26Z" fill="url(#lipGradLower)" stroke="#fda4af" stroke-width="1.2" stroke-linejoin="round"/>
+  <!-- Specular shimmer highlight on lower lip -->
+  <path d="M20 28.5C23 30.5 26 30.5 29 28.5" stroke="#ffffff" stroke-width="1.5" stroke-linecap="round" opacity="0.75"/>
+  <circle cx="27" cy="29.2" r="0.8" fill="#ffffff" opacity="0.9"/>
+  <!-- Iconic Beauty Mark (Upper-left lip corner, high-pigment mole) -->
+  <circle cx="12.5" cy="18.5" r="1.9" fill="#fda4af" stroke="#881337" stroke-width="0.8"/>
+  <circle cx="12.2" cy="18.2" r="0.6" fill="#ffffff" opacity="0.7"/>
+</svg>
