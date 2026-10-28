@@ -5,7 +5,7 @@ from core.fact_extractor import FactExtractor
 def test_stress_extraction():
     # 1. Construct a complex payload
     # Mixed content: JSON config, repeated logs, tracebacks, code blocks, and 3 specific facts
-    payload = """
+    payload = r"""
     # User Profile Configuration
     {
         "user_id": "vespera_01",
