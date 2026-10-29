@@ -122,10 +122,8 @@ class OllamaInjector(BaseInjector):
                 print("[*] Attempting local Ollama build for 'vespera'...")
                 result = subprocess.run(
                     ["ollama", "create", "vespera", "-f", self.target_file],
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    text=True,
-                    shell=True
+                    capture_output=True,
+                    text=True
                 )
                 if result.returncode == 0:
                     print("[+] Rebuild complete. Local Ollama model 'vespera' is fully updated!")
@@ -133,7 +131,7 @@ class OllamaInjector(BaseInjector):
                     print("[!] Modelfile written, but local Ollama creation failed.")
             else:
                 print("[!] Modelfile written, but local Ollama creation skipped (Ollama server is offline).")
-                print("    No worries—we are still syncing your dynamic system prompt to your IDE extensions...")
+                print("    No worries - we are still syncing your dynamic system prompt to your IDE extensions...")
                 
             # ALWAYS update Continue.dev's config.yaml, even if local Ollama fails/is offline!
             self.update_continue_config(full_system)

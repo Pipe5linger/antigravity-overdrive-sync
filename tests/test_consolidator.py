@@ -36,9 +36,17 @@ class TestMemoryConsolidator(unittest.TestCase):
         except OSError:
             pass
 
+    @patch("requests.get")
     @patch("requests.post")
-    def test_consolidate_local_ollama(self, mock_post):
+    def test_consolidate_local_ollama(self, mock_post, mock_get):
         self.db.set_preference("llm_provider", "local_ollama")
+
+        mock_get_response = MagicMock()
+        mock_get_response.status_code = 200
+        mock_get_response.json.return_value = {
+            "models": [{"name": "nomic-embed-text:latest"}]
+        }
+        mock_get.return_value = mock_get_response
 
         # Mock Ollama output to perform synthesis
         mock_response = MagicMock()
